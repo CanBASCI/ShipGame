@@ -30,7 +30,7 @@ scene.fog = new THREE.FogExp2(0x0c0612, 0.034);
 const camera = new THREE.PerspectiveCamera(42, 1, 0.08, 280);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.55, 1.05);
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.24, 0.4, 1.08);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -171,8 +171,8 @@ function update(dt) {
   reflectionScratch.push({
     pos: lanternPos.clone(),
     color: boatLanternColor.clone(),
-    gain: 2.15,
-    tight: 0.82,
+    gain: 2.7,
+    tight: 0.9,
   });
   world.reflections(boat.group.position, reflectionScratch);
   setWaterLights(water.uniforms, reflectionScratch);
@@ -183,7 +183,7 @@ function update(dt) {
   hemi.color.set(0x241430).lerp(new THREE.Color(0xd8c2b0), day);
   moon.intensity = THREE.MathUtils.lerp(0.04, 0.26, day);
   moon.color.set(0x6e6290).lerp(new THREE.Color(0xffd2b0), day);
-  renderer.toneMappingExposure = 0.8 + day * 0.18;
+  renderer.toneMappingExposure = 0.74 + day * 0.2;
 
   updateCamera(dt, false);
 }

@@ -28,9 +28,10 @@ const fragmentShader = /* glsl */ `
 
   float waveH(vec2 p) {
     float h = 0.0;
-    h += sin(p.x * 0.72 + p.y * 0.28 + uTime * 0.48) * 0.03;
-    h += sin(p.x * 1.55 - p.y * 1.05 + uTime * 0.72) * 0.014;
-    h += sin(dot(p, vec2(2.6, -1.4)) + uTime * 1.15) * 0.006;
+    h += sin(p.x * 0.72 + p.y * 0.28 + uTime * 0.48) * 0.018;
+    h += sin(p.x * 1.55 - p.y * 1.05 + uTime * 0.72) * 0.008;
+    h += sin(dot(p, vec2(2.6, -1.4)) + uTime * 1.15) * 0.0035;
+    h += sin(p.x * 9.5 + p.y * 7.2 + uTime * 1.35) * 0.0016;
     float sy = sin(uYaw);
     float cy = cos(uYaw);
     vec2 d = p - uBoat.xz;
@@ -49,15 +50,16 @@ const fragmentShader = /* glsl */ `
     float hx = waveH(p + vec2(e, 0.0)) - h;
     float hz = waveH(p + vec2(0.0, e)) - h;
     vec3 n = normalize(vec3(-hx / e, 1.0, -hz / e));
-    float micro = sin(p.x * 7.5 + uTime * 1.3) * sin(p.y * 6.4 - uTime * 1.05);
-    n.x += micro * 0.07;
-    n.z += cos(p.x * 5.1 - p.y * 4.4 + uTime) * 0.05;
+    vec3 viewDir = normalize(cameraPosition - vWorld);
+    float micro = sin(p.x * 22.0 + uTime * 1.7) * sin(p.y * 17.0 - uTime * 1.25);
+    float fine = sin(p.x * 47.0 + p.y * 29.0 - uTime * 2.2);
+    n.x += micro * 0.045 + fine * 0.018;
+    n.z += cos(p.x * 19.0 - p.y * 26.0 + uTime * 1.5) * 0.04 + sin(fine) * 0.012;
     n = normalize(n);
 
-    vec3 viewDir = normalize(cameraPosition - vWorld);
-    vec3 deep = mix(vec3(0.004, 0.003, 0.008), vec3(0.035, 0.032, 0.034), uDay);
-    float fres = pow(1.0 - clamp(dot(n, viewDir), 0.0, 1.0), 4.0);
-    vec3 color = deep + vec3(0.02, 0.018, 0.03) * fres * (1.0 - uDay * 0.4);
+    vec3 deep = mix(vec3(0.0012, 0.0008, 0.0022), vec3(0.03, 0.027, 0.03), uDay);
+    float fres = pow(1.0 - clamp(dot(n, viewDir), 0.0, 1.0), 6.0);
+    vec3 color = deep + vec3(0.006, 0.005, 0.01) * fres * (1.0 - uDay * 0.45);
 
     vec3 refl = vec3(0.0);
     vec2 camXZ = cameraPosition.xz;
@@ -73,21 +75,22 @@ const fragmentShader = /* glsl */ `
       float along = dot(toL, vd);
       float across = length(toL - vd * along);
       float tight = uTight[i];
-      float band = exp(-across * across * mix(0.9, 26.0, tight));
-      float gate = smoothstep(-0.6, 1.6, along) * exp(-max(along, 0.0) * mix(0.018, 0.055, tight));
-      float shim = 0.6 + 0.4 * sin(across * 16.0 + along * 2.6 + uTime * 1.6 + float(i) * 1.7);
+      float band = exp(-across * across * mix(6.0, 90.0, tight));
+      float gate = smoothstep(-0.2, 0.8, along) * exp(-max(along, 0.0) * mix(0.012, 0.04, tight));
+      float ripple = sin(across * 54.0 + along * 11.0 + uTime * 2.6 + float(i) * 1.7);
+      float shim = 0.35 + 0.65 * pow(clamp(0.5 + 0.5 * ripple, 0.0, 1.0), 4.0);
       float distL = length(toL);
-      float atten = gain / (1.0 + distL * distL * 0.0035);
+      float atten = gain / (1.0 + distL * distL * 0.0022);
       vec3 tint = uCol[i];
-      refl += tint * band * gate * shim * atten * 2.1;
-      float core = exp(-distL * distL * mix(0.12, 0.9, tight)) * gain * 0.45;
+      refl += tint * band * gate * shim * atten * 5.2;
+      float core = exp(-distL * distL * mix(0.35, 2.4, tight)) * gain * 0.85;
       refl += tint * core;
     }
 
-    float near = smoothstep(0.3, 4.5, viewLen);
-    refl *= mix(0.55, 1.0, near);
-    refl *= mix(1.0, 0.55, uDay);
-    color += min(refl, vec3(3.2));
+    float near = smoothstep(0.15, 3.2, viewLen);
+    refl *= mix(0.72, 1.0, near);
+    refl *= mix(1.0, 0.5, uDay);
+    color += min(refl, vec3(4.5));
 
     float sy = sin(uYaw);
     float cy = cos(uYaw);

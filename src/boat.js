@@ -12,7 +12,7 @@ const STEER_ACCEL = 0.42;
 const YAW_DRAG = 1.7;
 const BANK = 4.72;
 
-const WOOD = [0xd7b089, 0xc49a70, 0xe0c4a0, 0xb58962, 0xc9a67c, 0xa67c55];
+const WOOD = [0xc49262, 0x8d582f, 0xb67a48, 0x6e4428, 0x9a643c, 0x7a4e30];
 
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
@@ -41,23 +41,33 @@ function makeWoodTexture() {
   canvas.width = 256;
   canvas.height = 256;
   const g = canvas.getContext('2d');
-  g.fillStyle = '#c9a57a';
+  g.fillStyle = '#a87448';
   g.fillRect(0, 0, 256, 256);
-  for (let y = 0; y < 256; y++) {
-    const shade = 70 + Math.floor(Math.sin(y * 0.37) * 18 + Math.random() * 22);
-    g.strokeStyle = `rgba(${shade}, ${Math.floor(shade * 0.72)}, ${Math.floor(shade * 0.42)}, 0.18)`;
+  for (let y = 14; y < 242; y += 2) {
+    const shade = 168 + Math.floor(Math.sin(y * 0.47) * 28 + Math.random() * 36);
+    g.strokeStyle = `rgba(${shade}, ${Math.floor(shade * 0.58)}, ${Math.floor(shade * 0.28)}, 0.42)`;
     g.beginPath();
     g.moveTo(0, y);
-    g.lineTo(256, y + Math.sin(y * 0.2) * 1.5);
+    g.lineTo(256, y + Math.sin(y * 0.11) * 1.4);
     g.stroke();
   }
-  for (let i = 0; i < 18; i++) {
-    g.strokeStyle = `rgba(90, 60, 30, ${0.05 + Math.random() * 0.08})`;
+  g.fillStyle = '#3a2414';
+  g.fillRect(0, 0, 256, 12);
+  g.fillRect(0, 244, 256, 12);
+  for (let i = 0; i < 9; i++) {
+    const y = 20 + Math.random() * 210;
+    g.strokeStyle = `rgba(70, 38, 16, ${0.18 + Math.random() * 0.22})`;
+    g.lineWidth = 1 + Math.random() * 1.5;
     g.beginPath();
-    const y = Math.random() * 256;
     g.moveTo(0, y);
-    g.bezierCurveTo(80, y + 6, 160, y - 5, 256, y + 2);
+    g.bezierCurveTo(70, y + 8, 150, y - 6, 256, y + 3);
     g.stroke();
+  }
+  for (let i = 0; i < 5; i++) {
+    g.fillStyle = `rgba(90, 52, 24, ${0.12 + Math.random() * 0.12})`;
+    g.beginPath();
+    g.ellipse(40 + Math.random() * 180, 40 + Math.random() * 170, 8 + Math.random() * 14, 3 + Math.random() * 5, 0, 0, Math.PI * 2);
+    g.fill();
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -70,6 +80,7 @@ function bandGeometry(v0, v1) {
   const U = 24;
   const positions = [];
   const uvs = [];
+  const colors = [];
   const indices = [];
 
   function addStrip(side) {
@@ -80,8 +91,13 @@ function bandGeometry(v0, v1) {
       const hb = halfBeam(t);
       for (const v of [v0, v1]) {
         const s = section(v, hb);
+        const vn = (v - v0) / Math.max(0.0001, v1 - v0);
+        const seam = vn < 0.1 || vn > 0.88 ? 0.34 : 1;
+        const weather = 0.84 + 0.16 * Math.sin(t * 22 + v * 9);
+        const c = seam * weather;
         positions.push(side * s.x, s.y, z);
-        uvs.push(t * 3.2, (v - v0) / Math.max(0.0001, v1 - v0));
+        uvs.push(t * 2.4, vn);
+        colors.push(c, c * 0.94, c * 0.82);
       }
     }
     for (let i = 0; i < U; i++) {
@@ -100,6 +116,7 @@ function bandGeometry(v0, v1) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return geo;
@@ -135,45 +152,47 @@ function waterY(x, z, time) {
 }
 
 function makeOar(side) {
-  const black = new THREE.MeshBasicMaterial({ color: 0x07060a });
+  const black = new THREE.MeshBasicMaterial({ color: 0x050308 });
   const pivot = new THREE.Group();
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 1.95, 5), black);
+  const prominent = side > 0;
+  const len = prominent ? 2.28 : 2.05;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.026, len, 5), black);
   shaft.rotation.z = Math.PI / 2;
-  shaft.position.set(side * 0.95, -0.14, -0.2);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.18), black);
-  blade.position.set(side * 1.92, -0.34, -0.42);
-  blade.rotation.y = side * -0.25;
-  blade.rotation.z = side * -0.15;
+  shaft.position.set(side * len * 0.46, prominent ? -0.2 : -0.14, -0.16);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(prominent ? 0.64 : 0.5, 0.026, 0.2), black);
+  blade.position.set(side * (len * 0.9), prominent ? -0.52 : -0.42, -0.22);
+  blade.rotation.y = side * -0.22;
+  blade.rotation.z = side * (prominent ? -0.42 : -0.28);
   pivot.add(shaft, blade);
-  pivot.position.set(side * 0.5, 0.34, -0.12);
+  pivot.position.set(side * 0.46, 0.36, -0.02);
   pivot.userData.blade = blade;
   return pivot;
 }
 
 function makeRower(black) {
   const g = new THREE.Group();
-  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.34, 0.62, 8), black);
-  skirt.position.set(0, 0.42, -0.16);
-  skirt.scale.z = 0.72;
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.4, 8), black);
-  torso.position.set(0, 0.86, -0.04);
-  torso.rotation.x = -0.16;
-  const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.1, 0.18), black);
-  shoulders.position.set(0, 1.02, -0.02);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.105, 10, 8), black);
-  head.scale.set(1, 1.05, 0.92);
-  head.position.set(0, 1.2, 0.0);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.118, 0.128, 0.055, 10), black);
-  cap.position.set(0, 1.3, 0.0);
-  const brim = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.018, 0.16), black);
-  brim.position.set(0, 1.268, 0.03);
+  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.42, 0.82, 10), black);
+  skirt.position.set(0, 0.5, -0.1);
+  skirt.scale.z = 0.7;
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.18, 0.38, 8), black);
+  torso.position.set(0, 1.02, 0.0);
+  torso.rotation.x = -0.12;
+  const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.09, 0.16), black);
+  shoulders.position.set(0, 1.16, 0.0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 8), black);
+  head.scale.set(1, 1.02, 0.9);
+  head.position.set(0, 1.32, 0.02);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.145, 0.04, 12), black);
+  cap.position.set(0, 1.42, 0.02);
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.012, 14), black);
+  brim.position.set(0, 1.395, 0.03);
   const armGeo = new THREE.CylinderGeometry(0.04, 0.035, 0.42, 5);
   const armL = new THREE.Mesh(armGeo, black);
-  armL.position.set(-0.28, 0.84, 0.08);
+  armL.position.set(-0.3, 1.05, 0.1);
   armL.rotation.z = 0.85;
   armL.rotation.x = 0.55;
   const armR = new THREE.Mesh(armGeo, black);
-  armR.position.set(0.28, 0.84, 0.08);
+  armR.position.set(0.3, 1.05, 0.1);
   armR.rotation.z = -0.85;
   armR.rotation.x = 0.55;
   g.add(skirt, torso, shoulders, head, cap, brim, armL, armR);
@@ -221,15 +240,16 @@ export function createBoat() {
   group.rotation.order = 'YXZ';
   const woodTex = makeWoodTexture();
 
-  const bands = 5;
+  const bands = 6;
   for (let i = 0; i < bands; i++) {
     const v0 = i / bands;
     const v1 = (i + 1) / bands;
     const mat = new THREE.MeshStandardMaterial({
       map: woodTex,
       color: WOOD[i % WOOD.length],
-      roughness: 0.74,
-      metalness: 0.02,
+      roughness: i > 3 ? 0.58 : 0.72,
+      metalness: 0.04,
+      vertexColors: true,
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(bandGeometry(v0, v1), mat);
@@ -277,13 +297,21 @@ export function createBoat() {
   seat2.position.set(0, 0.2, 0.55);
   group.add(seat, seat2);
 
-  const post = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.6, 0.05), darkWood);
-  post.position.set(0, 0.48, -1.64);
+  const postMat = new THREE.MeshStandardMaterial({
+    map: woodTex,
+    color: 0xc98448,
+    roughness: 0.66,
+    metalness: 0.03,
+  });
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.98, 0.06), postMat);
+  post.position.set(0, 0.62, -1.62);
+  const postCap = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.09), postMat);
+  postCap.position.set(0, 1.1, -1.62);
   const bowPost = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.28, 0.04), darkWood);
   bowPost.position.set(0, 0.32, 1.7);
-  group.add(post, bowPost);
+  group.add(post, postCap, bowPost);
 
-  const black = new THREE.MeshBasicMaterial({ color: 0x07060a });
+  const black = new THREE.MeshBasicMaterial({ color: 0x050308 });
   group.add(makeRower(black));
 
   const oarL = makeOar(-1);
@@ -404,7 +432,7 @@ export function createBoat() {
     poseOar(oarR, 'right', time);
 
     const flicker = 1 + Math.sin(time * 2.3) * 0.03 + Math.sin(time * 5.1) * 0.015;
-    lantern.light.intensity = (14 - input.day * 6) * flicker;
+    lantern.light.intensity = (9 - input.day * 4) * flicker;
     lantern.glowMat.emissiveIntensity = (6.5 - input.day * 2.2) * flicker;
   }
 

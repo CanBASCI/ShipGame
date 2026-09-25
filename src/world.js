@@ -61,14 +61,19 @@ const puffFragment = /* glsl */ `
     vec2 p = vUv * 2.0 - 1.0;
     float r = dot(p, p);
     if (r > 1.0) discard;
-    float a = pow(1.0 - r, 1.35) * 0.62;
+    float rad = sqrt(r);
+    float petal = pow(1.0 - rad, 1.7);
+    float core = pow(1.0 - rad, 5.0);
     vec3 warm = vec3(1.0, 0.62, 0.45);
-    vec3 col = mix(vColor, mix(vColor, warm, 0.6), uDay * 0.72);
-    col *= mix(1.15, 0.72, uDay);
+    vec3 col = mix(vColor, mix(vColor, warm, 0.55), uDay * 0.7);
+    col *= mix(1.0, 0.62, uDay);
+    col *= mix(0.45, 1.0, petal);
+    col += vColor * core * mix(0.42, 0.12, uDay);
     float dist = distance(vWorld, cameraPosition);
     float fog = exp(-uFogDensity * uFogDensity * dist * dist);
     col = mix(uFogColor, col, fog);
-    gl_FragColor = vec4(col, a * fog);
+    float a = petal * mix(0.55, 0.38, uDay) * fog;
+    gl_FragColor = vec4(col, a);
   }
 `;
 
@@ -76,7 +81,7 @@ function cylinderBetween(a, b, r0, r1) {
   const dir = new THREE.Vector3().subVectors(b, a);
   const len = dir.length();
   if (len < 0.05) return null;
-  const geo = new THREE.CylinderGeometry(Math.max(0.02, r1), Math.max(0.03, r0), len, 5);
+  const geo = new THREE.CylinderGeometry(Math.max(0.02, r1), Math.max(0.03, r0), len, 7);
   geo.translate(0, len / 2, 0);
   const quat = new THREE.Quaternion().setFromUnitVectors(
     new THREE.Vector3(0, 1, 0),
@@ -137,24 +142,18 @@ export function createWorld(scene) {
     sphereMat.userData.shader = shader;
   };
 
-  const trunkMat = new THREE.MeshBasicMaterial({ color: 0x10080c });
+  const trunkMat = new THREE.MeshBasicMaterial({ color: 0x040208 });
   const quayMat = new THREE.MeshStandardMaterial({ color: 0x141216, roughness: 0.96, metalness: 0 });
   const lipMat = new THREE.MeshStandardMaterial({ color: 0x2a2428, roughness: 0.84, metalness: 0.02 });
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x0b090c, roughness: 1, metalness: 0 });
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a1214, roughness: 0.7, metalness: 0.2 });
 
-  const lanternBodyGeo = new THREE.LatheGeometry(
-    [
-      new THREE.Vector2(0.05, -0.2),
-      new THREE.Vector2(0.13, -0.12),
-      new THREE.Vector2(0.16, 0.0),
-      new THREE.Vector2(0.13, 0.12),
-      new THREE.Vector2(0.05, 0.2),
-    ],
-    6,
-  );
-  const lanternCoreGeo = new THREE.SphereGeometry(0.09, 8, 6);
-  const glassGeo = new THREE.SphereGeometry(0.28, 10, 8);
+  const lanternBodyGeo = new THREE.CylinderGeometry(0.11, 0.12, 0.3, 8, 1, true);
+  const lanternCapGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.045, 8);
+  const lanternPostGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.34, 4);
+  const lanternCoreGeo = new THREE.SphereGeometry(0.055, 8, 6);
+  const poleGeo = new THREE.CylinderGeometry(0.04, 0.055, 1, 6);
+  const armGeo = new THREE.CylinderGeometry(0.018, 0.018, 1, 4);
 
   const chunks = new Map();
   const lanterns = [];
@@ -162,98 +161,113 @@ export function createWorld(scene) {
   const tmp = new THREE.Color();
   const warm = new THREE.Color(0xffb36a);
 
-  function addTree(x, z, side, rng, index, puffs, spheres, woods) {
-    const height = 7.6 + rng() * 3.1;
-    const reach = 8.4 + rng() * 2.4;
-    const lean = side * (0.35 + rng() * 0.35);
-    const base = new THREE.Vector3(x, 0.15, z);
-    const mid = new THREE.Vector3(x - side * 0.9, height * 0.48, z + (rng() - 0.5) * 0.8);
-    const tip = new THREE.Vector3(x - side * reach, height * (0.78 + rng() * 0.12), z + (rng() - 0.5) * 2.4);
-    const ctrl = new THREE.Vector3(
-      x - side * reach * 0.35,
-      height * (0.95 + rng() * 0.12),
-      z + (rng() - 0.5) * 1.5,
-    );
+  function blossomHex(side, rng, index, hot) {
+    const shift = index * 0.045 + (rng() - 0.5) * 0.04;
+    const pick = rng();
+    let hex;
+    if (side < 0) {
+      if (pick < 0.44) hex = 0x2ee7ff;
+      else if (pick < 0.8) hex = 0xc43cff;
+      else hex = LEFT_COLORS[Math.floor(rng() * LEFT_COLORS.length)];
+    } else if (pick < 0.4) hex = 0xffa033;
+    else if (pick < 0.8) hex = 0xff2f86;
+    else hex = RIGHT_COLORS[Math.floor(rng() * RIGHT_COLORS.length)];
+    const col = hueShift(new THREE.Color(hex), shift);
+    col.multiplyScalar(hot ? 3.1 : 0.95);
+    return col;
+  }
 
-    const trunk = cylinderBetween(base, mid, 0.16, 0.07);
-    const branch = cylinderBetween(mid, tip, 0.06, 0.025);
+  function addTree(x, z, side, rng, index, puffs, spheres, woods) {
+    const height = 6.4 + rng() * 2.6;
+    const reach = 12.2 + rng() * 2.8;
+    const base = new THREE.Vector3(x, 0.05, z);
+    const mid = new THREE.Vector3(x - side * 0.55, height * 0.62, z + (rng() - 0.5) * 0.5);
+    const crown = new THREE.Vector3(
+      x - side * reach * 0.42,
+      height * (1.12 + rng() * 0.08),
+      z + (rng() - 0.5) * 0.8,
+    );
+    const tip = new THREE.Vector3(
+      x - side * reach,
+      height * (0.62 + rng() * 0.12),
+      z + (rng() - 0.5) * 1.4,
+    );
+    const ctrl = crown.clone();
+
+    const trunk = cylinderBetween(base, mid, 0.34 + rng() * 0.08, 0.16);
+    const limb = cylinderBetween(mid, crown, 0.12, 0.06);
+    const reacher = cylinderBetween(crown, tip, 0.07, 0.028);
     if (trunk) woods.push(trunk);
-    if (branch) woods.push(branch);
-    if (rng() > 0.4) {
-      const sideTip = tip.clone().add(new THREE.Vector3(-side * 0.8, -0.6, (rng() - 0.5) * 2));
-      const twig = cylinderBetween(mid.clone().lerp(tip, 0.45), sideTip, 0.035, 0.015);
+    if (limb) woods.push(limb);
+    if (reacher) woods.push(reacher);
+    const lowTip = new THREE.Vector3(
+      x - side * (reach * 0.92),
+      height * 0.42,
+      z + (rng() - 0.5) * 2.2,
+    );
+    const low = cylinderBetween(mid, lowTip, 0.055, 0.02);
+    if (low) woods.push(low);
+    if (rng() > 0.25) {
+      const twigTip = tip.clone().add(new THREE.Vector3((rng() - 0.5) * 1.6, -0.7, (rng() - 0.5) * 2.4));
+      const twig = cylinderBetween(crown.clone().lerp(tip, 0.35), twigTip, 0.04, 0.015);
       if (twig) woods.push(twig);
     }
 
-    const shift = index * 0.045 + (rng() - 0.5) * 0.02;
-    const palette = side < 0 ? LEFT_COLORS : RIGHT_COLORS;
-    const bias = (Math.sin(index * 0.65 + (side < 0 ? 0 : 1.7)) + 1) * 0.5;
-    const puffN = 52;
-    const sphereN = 36;
+    const puffN = 96;
+    const sphereN = 42;
     const pt = new THREE.Vector3();
 
     function pushBlossom(list, pos, scale, hot) {
-      const pick = rng();
-      let hex = palette[Math.floor(rng() * palette.length)];
-      if (side < 0 && pick < 0.48) hex = 0x2ee7ff;
-      else if (side < 0 && pick < 0.78) hex = 0xc43cff;
-      if (side > 0 && pick < 0.46) hex = 0xffa033;
-      else if (side > 0 && pick < 0.82) hex = 0xff2f86;
-      const col = hueShift(tmp.set(hex), shift);
-      if (hot) {
-        col.multiplyScalar(2.1);
-      } else if (list === spheres) {
-        col.multiplyScalar(0.85);
-      }
-      list.push({ pos: pos.clone(), scale, color: col.clone() });
+      const col = blossomHex(side, rng, index, hot);
+      list.push({ pos: pos.clone(), scale, color: col });
     }
 
     for (let i = 0; i < puffN; i++) {
       const roll = rng();
-      if (roll < 0.58) {
-        bezier(mid, ctrl, tip, Math.pow(rng(), 0.7), pt);
-        pt.x += (rng() - 0.5) * 1.5;
-        pt.y += (rng() - 0.5) * 1.2;
+      if (roll < 0.62) {
+        bezier(mid, ctrl, tip, Math.pow(rng(), 0.55), pt);
+        pt.x += (rng() - 0.5) * 2.2;
+        pt.y += (rng() - 0.55) * 1.5;
+        pt.z += (rng() - 0.5) * 2.0;
+      } else if (roll < 0.84) {
+        pt.copy(tip).lerp(lowTip, rng() * 0.65);
+        pt.x += (rng() - 0.5) * 1.8;
+        pt.y += (rng() - 0.4) * 1.3;
         pt.z += (rng() - 0.5) * 1.6;
-      } else if (roll < 0.82) {
-        pt.copy(tip);
-        pt.x += (rng() - 0.5) * 2.4;
-        pt.y += (rng() - 0.45) * 1.8;
-        pt.z += (rng() - 0.5) * 2.2;
       } else {
-        pt.copy(base).lerp(mid, 0.35 + rng() * 0.5);
-        pt.x -= side * rng() * 1.3;
-        pt.y += rng() * 0.8;
-        pt.z += (rng() - 0.5) * 1.2;
+        pt.copy(base).lerp(mid, 0.4 + rng() * 0.55);
+        pt.x -= side * rng() * 1.6;
+        pt.y += rng() * 1.4;
+        pt.z += (rng() - 0.5) * 1.1;
       }
-      pushBlossom(puffs, pt, 0.45 + rng() * 0.95, false);
+      const scale = rng() > 0.78 ? 0.9 + rng() * 1.35 : 0.14 + Math.pow(rng(), 0.65) * 0.72;
+      pushBlossom(puffs, pt, scale, scale < 0.32 && rng() > 0.45);
     }
 
     for (let i = 0; i < sphereN; i++) {
-      bezier(mid, ctrl, tip, 0.35 + rng() * 0.65, pt);
-      pt.x += (rng() - 0.5) * 1.8;
-      pt.y += (rng() - 0.5) * 1.3;
-      pt.z += (rng() - 0.5) * 1.5;
-      const hot = rng() > 0.78;
-      pushBlossom(spheres, pt, hot ? 0.05 + rng() * 0.05 : 0.07 + rng() * 0.12, hot);
+      bezier(mid, ctrl, tip, 0.25 + rng() * 0.75, pt);
+      pt.x += (rng() - 0.5) * 2.4;
+      pt.y += (rng() - 0.5) * 1.5;
+      pt.z += (rng() - 0.5) * 1.8;
+      const hot = rng() > 0.4;
+      pushBlossom(spheres, pt, 0.028 + rng() * 0.05, hot);
     }
 
+    const bias = (Math.sin(index * 0.65 + (side < 0 ? 0 : 1.7)) + 1) * 0.5;
     const massColor = hueShift(
-      tmp.set(side < 0 ? (bias > 0.5 ? 0x49d6ff : 0xc43cff) : bias > 0.5 ? 0xffa033 : 0xff2f86),
-      shift,
+      new THREE.Color(side < 0 ? (bias > 0.5 ? 0x49d6ff : 0xc43cff) : bias > 0.5 ? 0xffa033 : 0xff2f86),
+      index * 0.045,
     );
-    const massPos = tip.clone();
-    massPos.y -= 0.4;
+    const massPos = crown.clone().lerp(tip, 0.55);
+    massPos.y -= 0.35;
     massPos.z += index * CHUNK;
     masses.push({
       chunk: index,
       pos: massPos,
       base: massColor.clone(),
-      gain: 0.62,
-      tight: 0.2,
+      gain: 1.15,
+      tight: 0.46,
     });
-
-    void lean;
   }
 
   function makeInstances(baseGeo, material, list, useColorAttr) {
@@ -289,25 +303,27 @@ export function createWorld(scene) {
   function lanternPlan(index, rng) {
     if (index === 0) {
       return [
-        { side: 1, z: 7.2, scale: 2.15, color: 0xff3ea5, glass: true },
-        { side: -1, z: 5.2, scale: 1.25, color: 0xffc15a, glass: false },
-        { side: -1, z: 20, scale: 0.95, color: 0xb14bff, glass: false },
-        { side: 1, z: 24, scale: 0.92, color: 0x35d7ff, glass: false },
-        { side: -1, z: 33, scale: 0.86, color: 0xff7a2e, glass: false },
-        { side: 1, z: 37, scale: 0.8, color: 0xf4f0ff, glass: false },
+        { side: 1, x: 6.15, z: 4.35, scale: 2.7, color: 0xff3ea5, glass: true },
+        { side: -1, x: -6.35, z: 6.4, scale: 1.2, color: 0xffc15a, glass: true },
+        { side: -1, z: 16.5, scale: 0.72, color: 0xb14bff, glass: true },
+        { side: 1, z: 19.5, scale: 0.62, color: 0x35d7ff, glass: true },
+        { side: -1, z: 27, scale: 0.5, color: 0xff7a2e, glass: true },
+        { side: 1, z: 31, scale: 0.46, color: 0xf4f0ff, glass: true },
+        { side: 1, z: 37.5, scale: 0.4, color: 0xd06bff, glass: true },
+        { side: -1, z: 39, scale: 0.38, color: 0xffe7a8, glass: true },
       ];
     }
     const list = [];
     for (const side of [-1, 1]) {
       for (let i = 0; i < 3; i++) {
-        const z = (i + 0.28 + rng() * 0.45) * (CHUNK / 3);
+        const z = (i + 0.22 + rng() * 0.4) * (CHUNK / 3);
         const color = LANTERN_PALETTE[(Math.abs(index) * 3 + i * 2 + (side < 0 ? 0 : 4)) % LANTERN_PALETTE.length];
         list.push({
           side,
           z,
-          scale: 0.72 + rng() * 0.5,
+          scale: 0.42 + rng() * 0.45,
           color,
-          glass: rng() > 0.84,
+          glass: true,
         });
       }
     }
@@ -316,51 +332,79 @@ export function createWorld(scene) {
 
   function addLantern(parent, index, spec) {
     const g = new THREE.Group();
-    const poleH = (2.5 + spec.scale * 0.85) * (spec.glass ? 1.15 : 1);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, poleH, 6), poleMat);
+    const hero = spec.scale > 1.8;
+    const distant = spec.scale < 0.7;
+    const poleH = hero ? 3.25 : 2.05 + spec.scale * 0.7;
+    const pole = new THREE.Mesh(poleGeo, poleMat);
+    pole.scale.y = poleH;
     pole.position.y = poleH / 2;
-    const hang = -spec.side * (0.45 + spec.scale * 0.15);
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, Math.abs(hang) + 0.15, 4), poleMat);
+    const hang = -spec.side * (hero ? 1.25 : 0.62);
+    const arm = new THREE.Mesh(armGeo, poleMat);
     arm.rotation.z = Math.PI / 2;
+    arm.scale.y = Math.abs(hang) + 0.16;
     arm.position.set(hang * 0.5, poleH, 0);
+
+    const housing = new THREE.Group();
+    housing.position.set(hang, poleH - 0.08, 0);
+    housing.scale.setScalar(hero ? spec.scale * 0.62 : Math.max(0.7, spec.scale));
+
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const post = new THREE.Mesh(lanternPostGeo, poleMat);
+        post.position.set(sx * 0.105, 0, sz * 0.105);
+        housing.add(post);
+      }
+    }
+    const capTop = new THREE.Mesh(lanternCapGeo, poleMat);
+    capTop.position.y = 0.17;
+    const capBot = new THREE.Mesh(lanternCapGeo, poleMat);
+    capBot.position.y = -0.17;
+    housing.add(capTop, capBot);
+
     const glowMat = new THREE.MeshStandardMaterial({
       color: spec.color,
       emissive: spec.color,
-      emissiveIntensity: spec.glass ? 3.2 : 4.4,
-      roughness: spec.glass ? 0.12 : 0.35,
-      metalness: 0,
-      transparent: !!spec.glass,
-      opacity: spec.glass ? 0.78 : 1,
-      depthWrite: !spec.glass,
+      emissiveIntensity: hero ? 2.8 : 3.6,
+      roughness: 0.06,
+      metalness: 0.04,
+      transparent: true,
+      opacity: hero ? 0.5 : 0.62,
+      depthWrite: false,
+      side: THREE.DoubleSide,
     });
-    const body = new THREE.Mesh(spec.glass ? glassGeo : lanternBodyGeo, glowMat);
-    body.position.set(hang, poleH - 0.05, 0);
-    body.scale.setScalar(spec.glass ? spec.scale * 0.85 : spec.scale);
+    const glass = new THREE.Mesh(lanternBodyGeo, glowMat);
+    housing.add(glass);
+
+    const coreColor = new THREE.Color(spec.color).lerp(new THREE.Color(0xfff4dc), hero ? 0.28 : 0.12);
     const coreMat = new THREE.MeshStandardMaterial({
-      color: spec.color,
-      emissive: spec.color,
-      emissiveIntensity: spec.glass ? 8 : 6.5,
-      roughness: 0.4,
+      color: coreColor,
+      emissive: coreColor,
+      emissiveIntensity: distant ? 14 : hero ? 9 : 11,
+      roughness: 0.2,
     });
     const core = new THREE.Mesh(lanternCoreGeo, coreMat);
-    core.position.copy(body.position);
-    core.scale.setScalar(spec.glass ? 1.4 : 1);
-    g.add(pole, arm, core, body);
-    g.position.set(spec.side * 6.65, 0, spec.z);
+    core.scale.setScalar(distant ? 0.7 : 1.15);
+    housing.add(core);
+
+    g.add(pole, arm, housing);
+    const px = spec.x != null ? spec.x : spec.side * 6.45;
+    g.position.set(px, 0, spec.z);
     parent.add(g);
 
-    const world = new THREE.Vector3(spec.side * 6.65 + hang, poleH - 0.05, index * CHUNK + spec.z);
+    const headY = poleH - 0.08;
+    const world = new THREE.Vector3(px + hang, headY, index * CHUNK + spec.z);
     lanterns.push({
       chunk: index,
       pos: world,
       base: new THREE.Color(spec.color),
-      gain: spec.glass ? 1.55 : 1.15,
-      tight: spec.glass ? 0.48 : 0.78,
-      distance: spec.glass ? 22 : 14,
-      intensity: spec.glass ? 16 : 11,
+      gain: hero ? 2.4 : distant ? 1.35 : 1.7,
+      tight: hero ? 0.72 : 0.88,
+      distance: hero ? 26 : distant ? 11 : 16,
+      intensity: hero ? 22 : distant ? 8 : 13,
       mats: [glowMat, coreMat],
-      emNight: spec.glass ? 3.4 : 4.6,
-      emDay: 1.5,
+      emNight: hero ? 3.1 : distant ? 6.2 : 4.4,
+      emDay: 1.35,
+      coreNight: distant ? 16 : hero ? 10 : 12,
     });
   }
 
@@ -399,11 +443,35 @@ export function createWorld(scene) {
     const spheres = [];
     const woods = [];
     for (const side of [-1, 1]) {
-      const n = 4;
+      const n = 5;
       for (let i = 0; i < n; i++) {
-        const z = (i + 0.22 + rng() * 0.55) * (CHUNK / n);
-        const x = side * (7.15 + rng() * 1.35);
+        const z = (i + 0.08 + rng() * 0.35) * (CHUNK / n);
+        const x = side * (6.7 + rng() * 1.15);
         addTree(x, z, side, rng, index, puffs, spheres, woods);
+      }
+    }
+
+    for (let i = 0; i < 380; i++) {
+      const side = rng() < 0.5 ? -1 : 1;
+      const z = rng() * CHUNK;
+      const overhead = rng() > 0.42;
+      const x = overhead ? (rng() - 0.5) * 12.4 : side * (2.8 + rng() * 4.6);
+      const span = 1 - Math.min(1, Math.abs(x) / 6.4);
+      const y = overhead ? 2.6 + span * 4.6 + rng() * 1.5 : 1.15 + rng() * 4.4;
+      const scale = rng() > 0.76 ? 0.75 + rng() * 1.25 : 0.14 + rng() * 0.55;
+      const hot = scale < 0.28 && rng() > 0.5;
+      puffs.push({
+        pos: new THREE.Vector3(x, y, z),
+        scale,
+        color: blossomHex(side, rng, index, hot),
+      });
+      if (rng() > 0.62) {
+        const speck = blossomHex(x < 0 ? -1 : 1, rng, index, true);
+        spheres.push({
+          pos: new THREE.Vector3(x + (rng() - 0.5) * 0.35, y + (rng() - 0.5) * 0.25, z + (rng() - 0.5) * 0.35),
+          scale: 0.02 + rng() * 0.045,
+          color: speck,
+        });
       }
     }
 
@@ -461,7 +529,7 @@ export function createWorld(scene) {
   function update(boatPos, time, day) {
     dayUniform.value = day;
     puffMat.uniforms.uTime.value = time;
-    fogDensity.value = THREE.MathUtils.lerp(0.034, 0.022, day);
+    fogDensity.value = THREE.MathUtils.lerp(0.02, 0.015, day);
 
     const center = Math.floor(boatPos.z / CHUNK);
     const need = new Set();
@@ -476,11 +544,14 @@ export function createWorld(scene) {
     for (const L of lanterns) {
       tmp.copy(L.base).lerp(warm, day * 0.4);
       const em = THREE.MathUtils.lerp(L.emNight, L.emDay, day);
-      for (const m of L.mats) {
-        m.color.copy(tmp);
-        m.emissive.copy(tmp);
-        m.emissiveIntensity = em * (m === L.mats[1] ? 1.7 : 1);
-      }
+      const coreEm = THREE.MathUtils.lerp(L.coreNight || em * 2.2, L.emDay * 1.4, day);
+      L.mats[0].color.copy(tmp);
+      L.mats[0].emissive.copy(tmp);
+      L.mats[0].emissiveIntensity = em;
+      const core = tmp.clone().lerp(warm, 0.35);
+      L.mats[1].color.copy(core);
+      L.mats[1].emissive.copy(core);
+      L.mats[1].emissiveIntensity = coreEm;
     }
 
     const ranked = lanterns
@@ -631,15 +702,16 @@ function createMist() {
       uniform vec3 uColor;
       void main() {
         float d = distance(vWorld.xz, cameraPosition.xz);
-        float a = smoothstep(10.0, 78.0, d) * 0.16 * (1.0 - uDay * 0.45);
-        a *= smoothstep(0.0, 1.4, vWorld.y + 0.2);
+        float dist = smoothstep(16.0, 88.0, d);
+        float low = smoothstep(1.6, 0.02, vWorld.y);
+        float a = dist * mix(0.18, 1.0, low) * 0.48 * (1.0 - uDay * 0.4);
         vec3 col = mix(uColor, vec3(0.42, 0.34, 0.32), uDay);
         gl_FragColor = vec4(col, a);
       }
     `,
   });
   const meshes = [];
-  for (const y of [0.22, 0.6, 1.15]) {
+  for (const y of [0.08, 0.28, 0.55, 0.95, 1.55]) {
     const geo = new THREE.PlaneGeometry(24, 150, 1, 1);
     geo.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(geo, material);
