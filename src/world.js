@@ -61,6 +61,7 @@ export function createWorld(scene) {
           trunkSpan = span;
           trunkMesh = obj;
           trunkMesh.userData.axis = size;
+          trunkMesh.userData.isTrunk = true;
         }
       });
       if (trunkMesh) {
@@ -121,13 +122,18 @@ export function createWorld(scene) {
       tree.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
         // Blossom clusters ship with the file as role "secondary".
-        // The trunk material in the file is nearly black, so it vanished
-        // into the bank and the crown read as a horizontal mass.
+        // The file's trunk is a thin near-black cylinder. Thicken the shaft
+        // and hold it at a wood brown so it stays visible in the night scene.
         if (obj.userData.role === 'dark') {
+          const radial = obj.userData.isTrunk ? 4.4 : 2.4;
+          obj.scale.x *= radial;
+          obj.scale.z *= radial;
           const bark = obj.material.clone();
-          bark.color.set(0x6a4632);
-          bark.emissive.set(0x3a2216);
-          bark.emissiveIntensity = 0.55;
+          bark.color.set(0xc4a06a);
+          bark.emissive.set(0x8a5a32);
+          bark.emissiveIntensity = obj.userData.isTrunk ? 1.05 : 0.72;
+          bark.roughness = 0.78;
+          bark.metalness = 0;
           bark.userData.dispose = true;
           obj.material = bark;
           return;
