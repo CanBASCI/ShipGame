@@ -73,11 +73,11 @@ These files are stored in the repo and loaded by the scene.
 
 ## Distance mist
 
-- Author: Kenney
+- Author: WickedInsignia
 - License: CC0
-- Source: https://www.kenney.nl/assets/particle-pack
-- File: `public/assets/fog/mist.png`
-- Use: the mist in the distance. This is `smoke_04.png` from Kenney's Particle Pack. It is tiled through the far canal, banks, and trees so the fog has wisps. The boat and the nearby lanterns stay in front of it. The night tint is the scene fog color.
+- Source: https://opengameart.org/content/clouds-with-transparency
+- Files: `public/assets/fog/mist-a.png`, `public/assets/fog/mist-b.png`, `public/assets/fog/mist-c.png`
+- Use: the night distance mist. These are `FX_CloudAlpha02`, `FX_CloudAlpha04`, and `FX_CloudAlpha07` from WickedInsignia's "Clouds with Transparency", resized to 1024. Wide overlapping cards sit in the world across the canal and both banks. The mist stays clear by the boat, fades in farther ahead, and keeps going down the canal. Moonlight and the bow lantern are what show it.
 
 ## Bamboo lantern
 

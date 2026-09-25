@@ -85,6 +85,21 @@ export function createWorld(scene) {
   );
   const tmp = new THREE.Color();
   const warm = new THREE.Color(0xffb36a);
+  const bambooGlow = { value: 1 };
+  const bambooReflect = { value: 1 };
+  const treeLight = { value: 1 };
+
+  function applyTreeLight(mat) {
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTreeLight = treeLight;
+      shader.fragmentShader = `uniform float uTreeLight;\n${shader.fragmentShader}`;
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <opaque_fragment>',
+        'outgoingLight *= uTreeLight;\n#include <opaque_fragment>',
+      );
+    };
+    mat.customProgramCacheKey = () => 'sakura-tree-light';
+  }
 
   function tuneTreeMaterial(mat, bark) {
     mat.metalness = 0;
@@ -151,6 +166,7 @@ export function createWorld(scene) {
         if (!obj.isMesh || !obj.material) return;
         const mat = obj.material.clone();
         mat.userData.dispose = true;
+        applyTreeLight(mat);
         obj.material = mat;
       });
       tree.position.set(x, 0, z);
@@ -326,6 +342,7 @@ export function createWorld(scene) {
     }
 
     for (const spec of lanternPlan(index, rng)) addLantern(root, index, spec);
+    mist.addToChunk(root);
 
     scene.add(root);
     chunks.set(index, root);
@@ -361,7 +378,6 @@ export function createWorld(scene) {
   const sky = createSky();
   scene.add(sky.mesh);
   const mist = createMist();
-  for (const m of mist.meshes) scene.add(m);
 
   function update(boatPos, time, day, yaw = 0) {
     dayUniform.value = day;
@@ -384,7 +400,7 @@ export function createWorld(scene) {
         if (m.userData.role !== 'paper') continue;
         m.color.copy(tmp);
         m.emissive.copy(tmp);
-        m.emissiveIntensity = em;
+        m.emissiveIntensity = em * bambooGlow.value;
       }
     }
 
@@ -406,27 +422,17 @@ export function createWorld(scene) {
     sky.mesh.position.copy(boatPos);
     sky.mesh.position.y = 0;
     sky.uniforms.uDay.value = day;
-    let farAhead = 36;
     const fx = Math.sin(yaw);
     const fz = Math.cos(yaw);
-    for (const item of ranked) {
-      const dx = item.L.pos.x - boatPos.x;
-      const dz = item.L.pos.z - boatPos.z;
-      farAhead = Math.max(farAhead, dx * fx + dz * fz);
-    }
-    // Kenney mist sits between the boat and the farthest lit lantern,
-    // on the near side of that lantern. It does not continue past it.
-    const mistFar = farAhead;
+    // Fog stays in the world. The bow lantern and the moon are what light it.
+    const bowAhead = 1.94;
     mist.uniforms.uBoat.value.copy(boatPos);
     mist.uniforms.uYaw.value = yaw;
-    mist.uniforms.uMistStart.value = mistFar;
     mist.uniforms.uDay.value = day;
     mist.uniforms.uTime.value = time;
-    mist.uniforms.uFogDensity.value = fogDensity.value;
-    const mistMid = (8 + mistFar) * 0.5;
-    for (const mesh of mist.meshes) {
-      mesh.position.z = boatPos.z + mistMid;
-    }
+    mist.uniforms.uFwd.value.set(fx, 0, fz);
+    mist.uniforms.uBow.value.set(boatPos.x + fx * bowAhead, boatPos.y + 0.5, boatPos.z + fz * bowAhead);
+    mist.uniforms.uMoon.value.set(0, 9.2, boatPos.z + 30);
   }
 
   function lanternsAhead(boatPos, yaw, count) {
@@ -452,7 +458,7 @@ export function createWorld(scene) {
       into.push({
         pos: item.L.pos,
         color: tmp.clone(),
-        gain: item.L.gain,
+        gain: item.L.gain * bambooReflect.value,
         tight: item.L.tight,
       });
     }
@@ -467,6 +473,12 @@ export function createWorld(scene) {
     dayUniform,
     sky,
     mist,
+    setTune(next) {
+      bambooGlow.value = next.bamboo;
+      bambooReflect.value = next.water;
+      treeLight.value = next.tree;
+      mist.uniforms.uFogOn.value = next.fog ? 1 : 0;
+    },
   };
 }
 
@@ -545,69 +557,114 @@ function createSky() {
 }
 
 function createMist() {
-  const fogTex = new THREE.TextureLoader().load('/assets/fog/mist.png');
-  fogTex.colorSpace = THREE.NoColorSpace;
-  fogTex.wrapS = THREE.RepeatWrapping;
-  fogTex.wrapT = THREE.RepeatWrapping;
-  fogTex.magFilter = THREE.LinearFilter;
-  fogTex.minFilter = THREE.LinearMipmapLinearFilter;
+  const maps = ['/assets/fog/mist-a.png', '/assets/fog/mist-b.png', '/assets/fog/mist-c.png'].map((url) => {
+    const tex = new THREE.TextureLoader().load(url);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    return tex;
+  });
   const uniforms = {
     uDay: { value: 0 },
     uTime: { value: 0 },
-    uColor: { value: new THREE.Color(0x0c0612) },
-    uFog: { value: fogTex },
-    uFogDensity: { value: 0.034 },
     uBoat: { value: new THREE.Vector3() },
     uYaw: { value: 0 },
-    uMistStart: { value: 48 },
+    uBow: { value: new THREE.Vector3(0, 0.5, 1.94) },
+    uFwd: { value: new THREE.Vector3(0, 0, 1) },
+    uMoon: { value: new THREE.Vector3(0, 9.2, 30) },
+    uFogOn: { value: 1 },
   };
-  const material = new THREE.ShaderMaterial({
-    uniforms,
+  const vertexShader = /* glsl */ `
+    varying vec2 vUv;
+    varying vec3 vWorld;
+    uniform float uTime;
+    void main() {
+      vec4 world = modelMatrix * vec4(position, 1.0);
+      float phase = world.x * 0.11 + world.z * 0.07;
+      world.x += sin(uTime * 0.12 + phase) * 1.15;
+      world.z += cos(uTime * 0.08 + phase) * 0.7;
+      vWorld = world.xyz;
+      vUv = uv;
+      gl_Position = projectionMatrix * viewMatrix * world;
+    }
+  `;
+  const fragmentShader = /* glsl */ `
+    varying vec2 vUv;
+    varying vec3 vWorld;
+    uniform float uDay;
+    uniform vec3 uBoat;
+    uniform float uYaw;
+    uniform vec3 uBow;
+    uniform vec3 uFwd;
+    uniform vec3 uMoon;
+    uniform float uFogOn;
+    uniform sampler2D uMap;
+    void main() {
+      vec2 uv = vUv * vec2(0.62, 0.7) + vec2(0.19, 0.14);
+      float puff = texture2D(uMap, uv).a;
+      float puffB = texture2D(uMap, uv * 0.82 + vec2(0.06, 0.04)).a;
+      float cover = pow(clamp(max(puff, puffB * 0.9) * 3.3, 0.0, 1.0), 0.7);
+      float edge = smoothstep(0.0, 0.38, vUv.x) * smoothstep(1.0, 0.62, vUv.x);
+      edge *= smoothstep(0.0, 0.3, vUv.y) * smoothstep(1.0, 0.7, vUv.y);
+      cover *= edge;
+      float along = (vWorld.x - uBoat.x) * sin(uYaw) + (vWorld.z - uBoat.z) * cos(uYaw);
+      float dist = smoothstep(32.0, 78.0, along);
+      vec3 toBow = vWorld - uBow;
+      float bowDist = max(length(toBow), 0.001);
+      float facing = dot(toBow / bowDist, normalize(uFwd));
+      float beam = pow(clamp(facing, 0.0, 1.0), 1.7) * exp(-bowDist * 0.022);
+      vec3 toMoon = normalize(uMoon - vec3(0.0, 1.2, uBoat.z));
+      float moon = clamp(toMoon.y * 0.85 + 0.15, 0.0, 1.0) * (0.42 + 0.58 * clamp(vWorld.y / 9.0, 0.0, 1.0));
+      float night = 1.0 - uDay;
+      float lit = clamp(moon * 0.55 + beam * 1.15, 0.0, 1.0);
+      float a = cover * dist * lit * uFogOn * mix(1.0, 0.4, uDay);
+      if (a < 0.004) discard;
+      vec3 moonCol = vec3(0.46, 0.5, 0.62);
+      vec3 bowCol = vec3(0.92, 0.5, 0.18);
+      vec3 col = (moonCol * moon * 0.55 + bowCol * beam * 1.15) / max(lit, 0.001);
+      col *= night + uDay * 0.85;
+      gl_FragColor = vec4(col, a);
+    }
+  `;
+  const materials = maps.map((map) => new THREE.ShaderMaterial({
+    uniforms: {
+      uDay: uniforms.uDay,
+      uTime: uniforms.uTime,
+      uBoat: uniforms.uBoat,
+      uYaw: uniforms.uYaw,
+      uBow: uniforms.uBow,
+      uFwd: uniforms.uFwd,
+      uMoon: uniforms.uMoon,
+      uFogOn: uniforms.uFogOn,
+      uMap: { value: map },
+    },
     transparent: true,
     depthWrite: false,
-    vertexShader: /* glsl */ `
-      varying vec3 vWorld;
-      void main() {
-        vec4 world = modelMatrix * vec4(position, 1.0);
-        vWorld = world.xyz;
-        gl_Position = projectionMatrix * viewMatrix * world;
+    side: THREE.DoubleSide,
+    vertexShader,
+    fragmentShader,
+  }));
+  const geo = new THREE.PlaneGeometry(42, 16);
+  function addToChunk(root) {
+    const depths = [6, 20, 34];
+    const across = [-18, 0, 18];
+    const turns = [-0.14, 0.12];
+    let n = 0;
+    for (const z of depths) {
+      for (const x of across) {
+        for (const turn of turns) {
+          const mesh = new THREE.Mesh(geo, materials[n % materials.length]);
+          mesh.position.set(x, 6.4, z);
+          mesh.rotation.y = turn;
+          mesh.renderOrder = 2;
+          mesh.frustumCulled = false;
+          root.add(mesh);
+          n += 1;
+        }
       }
-    `,
-    fragmentShader: /* glsl */ `
-      varying vec3 vWorld;
-      uniform float uDay;
-      uniform float uTime;
-      uniform vec3 uColor;
-      uniform vec3 uBoat;
-      uniform float uYaw;
-      uniform float uMistStart;
-      uniform sampler2D uFog;
-      void main() {
-        vec2 drift = vec2(uTime * 0.015, uTime * 0.008);
-        vec2 uvA = vWorld.xz * 0.042 + vec2(vWorld.y * 0.31, 0.0) + drift;
-        vec2 uvB = vWorld.xz * 0.019 + vec2(0.0, vWorld.y * 0.17) - drift * 0.6;
-        float wisp = texture2D(uFog, uvA).a;
-        float wispB = texture2D(uFog, uvB).a;
-        float mist = clamp(wisp * 0.85 + wispB * 0.55, 0.0, 1.0);
-        float along = (vWorld.x - uBoat.x) * sin(uYaw) + (vWorld.z - uBoat.z) * cos(uYaw);
-        float nearSide = smoothstep(8.0, 16.0, along);
-        float stopAtLantern = 1.0 - smoothstep(uMistStart - 5.0, uMistStart, along);
-        float dist = nearSide * stopAtLantern;
-        float a = dist * mist * 0.55 * (1.0 - uDay * 0.65);
-        vec3 col = mix(uColor, vec3(0.55, 0.5, 0.48), uDay);
-        gl_FragColor = vec4(col, a);
-      }
-    `,
-  });
-  const meshes = [];
-  for (const y of [0.15, 0.7, 1.6, 3.1, 4.8, 6.4]) {
-    const geo = new THREE.PlaneGeometry(26, 150, 1, 1);
-    geo.rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(geo, material);
-    mesh.position.y = y;
-    mesh.renderOrder = 2;
-    mesh.frustumCulled = false;
-    meshes.push(mesh);
+    }
   }
-  return { meshes, uniforms };
+  return { uniforms, addToChunk };
 }

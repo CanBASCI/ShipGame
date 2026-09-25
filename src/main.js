@@ -94,7 +94,10 @@ function hideHint() {
   hint.classList.add('hide');
 }
 
+let dayHold = null;
+
 function dayAmount() {
+  if (dayHold != null) return dayHold;
   return 0.5 - 0.5 * Math.cos((time / CYCLE) * Math.PI * 2);
 }
 
@@ -241,6 +244,7 @@ function frame(now) {
   }
   frames += 1;
   if (frames > 8) window.__ship.ready = true;
+  if (dayHold == null) daySlider.value = String(dayAmount());
   requestAnimationFrame(frame);
 }
 
@@ -253,6 +257,37 @@ console.error = (...args) => {
 window.addEventListener('error', (event) => {
   errors.push(String(event.message || event.error || 'error'));
 });
+
+const tune = { fog: true, bamboo: 1, water: 1, tree: 1 };
+const TUNE_STEP = 1.1;
+const fogToggle = document.getElementById('fog-toggle');
+const daySlider = document.getElementById('day-slider');
+
+function applyTune() {
+  world.setTune(tune);
+}
+
+fogToggle.addEventListener('click', () => {
+  tune.fog = !tune.fog;
+  fogToggle.setAttribute('aria-pressed', String(tune.fog));
+  applyTune();
+});
+
+document.getElementById('tune').addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-tune]');
+  if (!button) return;
+  const key = button.dataset.tune;
+  const next = tune[key] * (Number(button.dataset.dir) > 0 ? TUNE_STEP : 1 / TUNE_STEP);
+  tune[key] = Math.min(4, Math.max(0.25, next));
+  applyTune();
+});
+
+function holdDayFromSlider() {
+  dayHold = Number(daySlider.value);
+}
+
+daySlider.addEventListener('input', holdDayFromSlider);
+daySlider.addEventListener('change', holdDayFromSlider);
 
 window.__ship = {
   ready: false,
@@ -301,6 +336,8 @@ window.__ship = {
       yawRate: boat.state.yawRate,
       speed: boat.state.speed,
       day: dayAmount(),
+      dayHeld: dayHold != null,
+      tune: { ...tune },
       time,
       hintHidden,
       bowX: ahead.x,

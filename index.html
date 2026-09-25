@@ -8,6 +8,28 @@
   </head>
   <body>
     <canvas id="c"></canvas>
+    <aside id="tune">
+      <button type="button" id="fog-toggle" aria-pressed="true">Sis</button>
+      <div class="tune-row">
+        <button type="button" data-tune="bamboo" data-dir="-1" aria-label="Bambu ışığı azalt">−</button>
+        <span>Bambu ışığı</span>
+        <button type="button" data-tune="bamboo" data-dir="1" aria-label="Bambu ışığı artır">+</button>
+      </div>
+      <div class="tune-row">
+        <button type="button" data-tune="water" data-dir="-1" aria-label="Su yansıması azalt">−</button>
+        <span>Su yansıması</span>
+        <button type="button" data-tune="water" data-dir="1" aria-label="Su yansıması artır">+</button>
+      </div>
+      <div class="tune-row">
+        <button type="button" data-tune="tree" data-dir="-1" aria-label="Ağaç azalt">−</button>
+        <span>Ağaç</span>
+        <button type="button" data-tune="tree" data-dir="1" aria-label="Ağaç artır">+</button>
+      </div>
+      <label class="tune-day">
+        <span>Gece–gündüz</span>
+        <input id="day-slider" type="range" min="0" max="1" step="0.01" value="0" />
+      </label>
+    </aside>
     <p id="hint">W ileri · A sol · S dur · D sağ</p>
     <script type="module" src="/src/main.js"></script>
   </body>

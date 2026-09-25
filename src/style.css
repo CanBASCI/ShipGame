@@ -34,6 +34,70 @@ html, body {
   opacity: 0;
 }
 
+#tune {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 168px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(8, 4, 14, 0.72);
+  color: rgba(226, 214, 204, 0.82);
+  font-family: Palatino, "Palatino Linotype", Georgia, serif;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+#tune button {
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(226, 214, 204, 0.28);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#fog-toggle {
+  padding: 4px 8px;
+}
+
+#fog-toggle[aria-pressed="false"] {
+  opacity: 0.45;
+}
+
+.tune-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 22px;
+  align-items: center;
+  gap: 4px;
+}
+
+.tune-row span,
+.tune-day span {
+  text-align: center;
+}
+
+.tune-row button {
+  padding: 0;
+  line-height: 20px;
+}
+
+.tune-day {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tune-day input {
+  width: 100%;
+  margin: 0;
+  accent-color: #c9b7a2;
+}
+
 body::after {
   content: "";
   position: fixed;
