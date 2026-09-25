@@ -50,7 +50,12 @@ These files are stored in the repo and loaded by the scene.
 - Files: `public/assets/paper/Paper003_Color.jpg`, `Paper003_NormalGL.jpg`, `Paper003_Roughness.jpg`
 - Use: paper panels of the bamboo lanterns, tinted yellow, pink, purple, cyan, orange, and white
 
+## Brass lantern
+
+- File: `public/assets/lantern/Lantern_01_1k.gltf`
+- Use: the warm hanging lamp on the bow of the boat. No post. The banks do not use this mesh.
+
 ## Bamboo lantern
 
 - File: `public/assets/lantern/bamboo_lantern.glb`
-- Use: hexagonal bamboo-and-paper lanterns on posts along the canal. The frame uses the bamboo veneer above. The shade uses the paper maps above. This replaces the brass Lantern 01 mesh.
+- Use: hexagonal bamboo-and-paper lanterns on posts along the canal. The frame uses the bamboo veneer above. The shade uses the paper maps above.

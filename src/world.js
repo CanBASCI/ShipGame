@@ -427,10 +427,6 @@ export function createWorld(scene) {
       .map((L) => ({ L, d: L.pos.distanceToSquared(boatPos) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, 8);
-    const massesNear = masses
-      .map((M) => ({ M, d: M.pos.distanceToSquared(boatPos) }))
-      .sort((a, b) => a.d - b.d)
-      .slice(0, 7);
     for (const item of lanternsNear) {
       if (into.length >= 15) break;
       tmp.copy(item.L.base).lerp(warm, dayUniform.value * 0.4);
@@ -439,16 +435,6 @@ export function createWorld(scene) {
         color: tmp.clone(),
         gain: item.L.gain,
         tight: item.L.tight,
-      });
-    }
-    for (const item of massesNear) {
-      if (into.length >= 15) break;
-      tmp.copy(item.M.base).lerp(warm, dayUniform.value * 0.35);
-      into.push({
-        pos: item.M.pos,
-        color: tmp.clone(),
-        gain: item.M.gain,
-        tight: item.M.tight,
       });
     }
     return into;

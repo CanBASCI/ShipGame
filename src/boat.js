@@ -13,9 +13,9 @@ const BANK = 4.72;
 // A bend would return that stretch's heading instead of this constant.
 const DOWNSTREAM_YAW = 0;
 const YAW_LIMIT = Math.PI / 2;
-// Keel of the loaded hull is local y=-0.12. This leaves the outside keel in
-// the water and the open interior above it.
-const KEEL_RAISE = 0.115;
+// Keel of the loaded hull is local y=-0.12. Sit it on the water so the
+// open interior stays dry and the outside still meets the surface.
+const KEEL_RAISE = 0.124;
 // One scale against the model's original beam. Length and height stay 1.
 const BEAM_NARROW = 0.75;
 // Nudge the hull forward of the follow point. The camera distance and height stay put.
@@ -99,40 +99,14 @@ function makeRower(black) {
   return g;
 }
 
-function makeLantern(woodMat) {
+const BOW_LAMP = new THREE.Vector3(0.58, 1.16, 0.7);
+
+function makeLantern() {
   const g = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.028, 0.92, 6), woodMat);
-  pole.position.set(0.42, 0.78, 0.55);
-  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.28, 5), woodMat);
-  arm.rotation.z = Math.PI / 2;
-  arm.position.set(0.5, 1.22, 0.62);
-  const frameMat = new THREE.MeshStandardMaterial({
-    color: 0x2a2118,
-    roughness: 0.6,
-    metalness: 0.15,
-  });
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.2), frameMat);
-  frame.position.set(0.58, 1.16, 0.7);
-  const glowMat = new THREE.MeshStandardMaterial({
-    color: 0xffe2a8,
-    emissive: 0xffb03a,
-    emissiveIntensity: 6.5,
-    roughness: 0.35,
-  });
-  const glow = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.16), glowMat);
-  glow.position.copy(frame.position);
-  const haloMat = new THREE.MeshBasicMaterial({
-    color: 0xffc56a,
-    transparent: true,
-    opacity: 0.35,
-    depthWrite: false,
-  });
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), haloMat);
-  halo.position.copy(frame.position);
   const light = new THREE.PointLight(0xffb45a, 18, 12, 2);
-  light.position.copy(frame.position);
-  g.add(pole, arm, frame, glow, halo, light);
-  return { group: g, glowMat, light, localPos: frame.position.clone() };
+  light.position.copy(BOW_LAMP);
+  g.add(light);
+  return { group: g, glowMats: [], light, localPos: BOW_LAMP.clone() };
 }
 
 export function createBoat() {
@@ -152,13 +126,6 @@ export function createBoat() {
     metalness: 0.02,
     side: THREE.DoubleSide,
   });
-  const poleMat = new THREE.MeshStandardMaterial({
-    ...plankMaps,
-    color: 0xc4a074,
-    roughness: 0.8,
-    metalness: 0.03,
-  });
-
   const black = new THREE.MeshBasicMaterial({ color: 0x050308 });
   const body = new THREE.Group();
   body.position.z = FRAME_AHEAD;
@@ -176,8 +143,26 @@ export function createBoat() {
   );
   body.add(oarL, oarR);
 
-  const lantern = makeLantern(poleMat);
+  const lantern = makeLantern();
   body.add(lantern.group);
+  const lampLoader = new GLTFLoader();
+  lampLoader.load('/assets/lantern/Lantern_01_1k.gltf', (gltf) => {
+    const model = gltf.scene;
+    // Half of the previous 1.7 fit. The whole mesh stays, including its foot.
+    const s = 0.85;
+    model.scale.setScalar(s);
+    model.position.set(BOW_LAMP.x, BOW_LAMP.y - 0.147 * s, BOW_LAMP.z);
+    model.traverse((obj) => {
+      if (!obj.isMesh || !obj.material) return;
+      const glass = obj.name === 'Lantern_01_glass' || obj.material.name === 'Lantern_01_glass';
+      if (!glass) return;
+      obj.material = obj.material.clone();
+      obj.material.emissive = new THREE.Color(0xffb03a);
+      obj.material.emissiveIntensity = 2.4;
+      lantern.glowMats.push(obj.material);
+    });
+    lantern.group.add(model);
+  });
 
   const loader = new GLTFLoader();
   loader.load('/assets/boat/rowboat.glb', (gltf) => {
@@ -359,7 +344,8 @@ export function createBoat() {
 
     const flicker = 1 + Math.sin(time * 2.3) * 0.03 + Math.sin(time * 5.1) * 0.015;
     lantern.light.intensity = (9 - input.day * 4) * flicker;
-    lantern.glowMat.emissiveIntensity = (6.5 - input.day * 2.2) * flicker;
+    const glow = (2.4 - input.day * 0.8) * flicker;
+    for (const mat of lantern.glowMats) mat.emissiveIntensity = glow;
   }
 
   const lanternWorld = new THREE.Vector3();
