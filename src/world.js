@@ -61,9 +61,7 @@ export function createWorld(scene) {
           const bark = /bark/i.test(obj.material.name);
           const mat = obj.material.clone();
           mat.name = obj.material.name;
-          // The photo stays the surface color, so lanterns and daylight shade it.
-          // A small emissive lift keeps the photo readable at night without
-          // painting the crown a flat color or leaving it glowing all day.
+          // The photo stays the surface color. Night shows it only in lantern light.
           tuneTreeMaterial(mat, bark);
           obj.material = mat;
         });
@@ -90,10 +88,12 @@ export function createWorld(scene) {
 
   function tuneTreeMaterial(mat, bark) {
     mat.metalness = 0;
+    // The photo is the lit surface only. It does not glow on its own,
+    // so at night the texture appears where a lantern reaches.
     mat.color.set(0xffffff);
-    mat.emissive.set(0xffffff);
-    mat.emissiveMap = mat.map;
-    mat.emissiveIntensity = 1;
+    mat.emissive.set(0x000000);
+    mat.emissiveMap = null;
+    mat.emissiveIntensity = 0;
     mat.userData.bark = bark;
     if (bark) {
       mat.roughness = 0.88;
@@ -108,18 +108,6 @@ export function createWorld(scene) {
         mat.map.colorSpace = THREE.SRGBColorSpace;
       }
     }
-    const nightLift = bark ? 0.1 : 0.2;
-    const dayLift = bark ? 0.02 : 0.04;
-    mat.onBeforeCompile = (shader) => {
-      shader.uniforms.uDay = dayUniform;
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uDay;')
-        .replace(
-          '#include <emissivemap_fragment>',
-          `#include <emissivemap_fragment>
-           totalEmissiveRadiance *= mix(${nightLift}, ${dayLift}, uDay);`,
-        );
-    };
     mat.needsUpdate = true;
   }
 
