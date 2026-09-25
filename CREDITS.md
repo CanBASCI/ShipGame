@@ -43,6 +43,15 @@ These files are stored in the repo and loaded by the scene.
 - Files: `public/assets/water/Foam001_NormalGL.jpg`, `Foam001_Roughness.jpg`
 - Use: fine ripple normal and roughness on the dark canal. Lantern and blossom reflections stay in the water shader. The foam color map is not used.
 
+## Sea part
+
+- Author: Ayberk Tosunoglu (https://sketchfab.com/aybush)
+- License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+- Source: https://sketchfab.com/3d-models/sea-part-e90b3547e64a4bbd825fd126760f1770
+- Files: `public/assets/water/sea_part/scene.gltf`, `public/assets/water/sea_part/scene.bin`
+- Use: the canal surface the boat rides on. The patch is widened to the canal and repeated along it. The crests sit on the waterline so the hull is not buried.
+- This work is based on "Sea part" (https://sketchfab.com/3d-models/sea-part-e90b3547e64a4bbd825fd126760f1770) by Ayberk Tosunoglu (https://sketchfab.com/aybush) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
+
 ## Bamboo veneer
 
 - Author: Jenelle van Heerden

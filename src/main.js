@@ -197,7 +197,8 @@ function update(dt) {
   scene.fog.density = world.fogDensity.value;
   world.fogColor.copy(scene.fog.color);
 
-  water.mesh.position.z = boat.state.z;
+  const seaTile = water.mesh.userData.seaTile;
+  water.mesh.position.z = seaTile ? Math.round(boat.state.z / seaTile) * seaTile : boat.state.z;
   water.uniforms.uTime.value = time;
   water.uniforms.uDay.value = day;
   water.uniforms.uFogColor.value.copy(scene.fog.color);
