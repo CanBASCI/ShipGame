@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { createWater, setWaterLights } from './water.js';
+import { createWater, setWaterLights, noteSplashes } from './water.js';
 import { createBoat } from './boat.js';
 import { createWorld } from './world.js';
 
@@ -95,7 +95,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3 };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3 };
 world.setTune(tune);
 
 function dayAmount() {
@@ -203,19 +203,21 @@ function update(dt) {
   water.uniforms.uBoat.value.copy(boat.group.position);
   water.uniforms.uYaw.value = boat.state.yaw;
   water.uniforms.uSpeed.value = Math.abs(boat.state.speed);
+  noteSplashes(water.uniforms, boat.blades(), time);
   water.uniforms.uFogColor.value.copy(scene.fog.color);
   water.uniforms.uFogDensity.value = scene.fog.density;
 
   reflectionScratch.length = 0;
-  const lanternPos = boat.lanternPosition();
   boatLanternColor.set(0xffb45a).lerp(new THREE.Color(0xffc48a), day * 0.3);
-  reflectionScratch.push({
-    pos: lanternPos.clone(),
-    color: boatLanternColor.clone(),
-    gain: 1.51875,
-    tight: 0.9,
-    patch: true,
-  });
+  for (const lamp of boat.lanternLights()) {
+    reflectionScratch.push({
+      pos: lamp.pos,
+      color: boatLanternColor.clone(),
+      gain: 1.51875 * lamp.bright,
+      tight: 0.9,
+      patch: true,
+    });
+  }
   const night = 1 - day;
   fullMoon.position.set(0, MOON_HEIGHT, boat.state.z + MOON_AHEAD);
   fullMoon.material.opacity = night;
@@ -279,6 +281,7 @@ window.addEventListener('error', (event) => {
 
 const TUNE_STEP = 1.1;
 const fogToggle = document.getElementById('fog-toggle');
+const bambooToggle = document.getElementById('bamboo-toggle');
 const boatSwitch = document.getElementById('boat-switch');
 const daySlider = document.getElementById('day-slider');
 const dayVal = document.getElementById('day-val');
@@ -288,6 +291,8 @@ function paintTune() {
     el.textContent = tune[el.dataset.val].toFixed(1);
   }
   dayVal.textContent = dayAmount().toFixed(1);
+  bambooToggle.textContent = tune.bambooOn ? 'Açık' : 'Kapalı';
+  bambooToggle.setAttribute('aria-pressed', String(tune.bambooOn));
 }
 
 function applyTune() {
@@ -302,6 +307,11 @@ boatSwitch.addEventListener('click', (event) => {
   for (const el of boatSwitch.querySelectorAll('button')) {
     el.setAttribute('aria-pressed', String(el === button));
   }
+});
+
+bambooToggle.addEventListener('click', () => {
+  tune.bambooOn = !tune.bambooOn;
+  applyTune();
 });
 
 fogToggle.addEventListener('click', () => {

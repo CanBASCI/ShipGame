@@ -74,12 +74,14 @@ const LAMP_SCALE = 0.85;
 const LAMP_FOOT_Y = 0.337;
 const BOW_LAMP = new THREE.Vector3(0, LAMP_FOOT_Y + 0.0955 * LAMP_SCALE, 1.72);
 
-function makeLantern() {
+function makeLantern(foot, bright) {
   const g = new THREE.Group();
-  const light = new THREE.PointLight(0xffb45a, 10.125, 12, 2);
-  light.position.copy(BOW_LAMP);
+  const localPos = foot.clone();
+  localPos.y += 0.0955 * LAMP_SCALE;
+  const light = new THREE.PointLight(0xffb45a, 10.125 * bright, 12, 2);
+  light.position.copy(localPos);
   g.add(light);
-  return { group: g, glowMats: [], light, localPos: BOW_LAMP.clone() };
+  return { group: g, glowMats: [], light, localPos, foot: foot.clone(), bright };
 }
 
 export function createBoat() {
@@ -119,8 +121,14 @@ export function createBoat() {
   oarR.visible = false;
   body.add(oarL, oarR);
 
-  const lantern = makeLantern();
+  const lantern = makeLantern(new THREE.Vector3(0, 0.63, 1.7), 1);
   body.add(lantern.group);
+  // Rear quarters of the Donnichols gunwale. Same lamp, 75% as bright, no forward beam.
+  const sternLamps = [
+    makeLantern(new THREE.Vector3(-0.45, 0.525, -1.69), 0.75),
+    makeLantern(new THREE.Vector3(0.45, 0.525, -1.69), 0.75),
+  ];
+  for (const lamp of sternLamps) body.add(lamp.group);
   // Forward beam only. Thin at the bow, wider ahead. Off unless moving forward.
   const headlight = new THREE.SpotLight(0xffe2b8, 0, 52, 0.5, 0.55, 2);
   headlight.position.set(0, 0.72, 1.9);
@@ -129,21 +137,23 @@ export function createBoat() {
   group.add(headlight.target);
   const lampLoader = new GLTFLoader();
   lampLoader.load('/assets/lantern/Lantern_01_1k.gltf', (gltf) => {
-    const model = gltf.scene;
-    model.scale.setScalar(LAMP_SCALE);
-    model.position.set(BOW_LAMP.x, LAMP_FOOT_Y, BOW_LAMP.z);
-    model.traverse((obj) => {
-      if (!obj.isMesh || !obj.material) return;
-      const glass = obj.name === 'Lantern_01_glass' || obj.material.name === 'Lantern_01_glass';
-      if (!glass) return;
-      obj.material = obj.material.clone();
-      obj.material.emissive = new THREE.Color(0xffb03a);
-      obj.material.emissiveIntensity = 1.35;
-      lantern.glowMats.push(obj.material);
-    });
-    lampModel = model;
+    for (const lamp of [lantern, ...sternLamps]) {
+      const model = gltf.scene.clone(true);
+      model.scale.setScalar(LAMP_SCALE);
+      model.position.copy(lamp.foot);
+      model.traverse((obj) => {
+        if (!obj.isMesh || !obj.material) return;
+        const glass = obj.name === 'Lantern_01_glass' || obj.material.name === 'Lantern_01_glass';
+        if (!glass) return;
+        obj.material = obj.material.clone();
+        obj.material.emissive = new THREE.Color(0xffb03a);
+        obj.material.emissiveIntensity = 1.35;
+        lamp.glowMats.push(obj.material);
+      });
+      if (lamp === lantern) lampModel = model;
+      lamp.group.add(model);
+    }
     placeLantern();
-    lantern.group.add(model);
   });
 
   const loader = new GLTFLoader();
@@ -247,6 +257,10 @@ export function createBoat() {
     donnRoot.visible = donn;
     donnOarL.visible = donn;
     donnOarR.visible = donn;
+    for (const lamp of sternLamps) {
+      lamp.group.visible = donn;
+      lamp.light.visible = donn;
+    }
     placeLantern();
   }
 
@@ -416,16 +430,30 @@ export function createBoat() {
     poseOar(donnOarR, 'right', time);
 
     const flicker = 1 + Math.sin(time * 2.3) * 0.03 + Math.sin(time * 5.1) * 0.015;
-    lantern.light.intensity = (5.0625 - input.day * 2.25) * flicker;
+    const level = (5.0625 - input.day * 2.25) * flicker;
+    lantern.light.intensity = level * lantern.bright;
+    for (const lamp of sternLamps) lamp.light.intensity = lamp.light.visible ? level * lamp.bright : 0;
     headlight.intensity = input.forward ? 42 : 0;
     const glow = (1.35 - input.day * 0.45) * flicker;
-    for (const mat of lantern.glowMats) mat.emissiveIntensity = glow;
+    for (const mat of lantern.glowMats) mat.emissiveIntensity = glow * lantern.bright;
+    for (const lamp of sternLamps) {
+      for (const mat of lamp.glowMats) mat.emissiveIntensity = lamp.light.visible ? glow * lamp.bright : 0;
+    }
   }
 
   const lanternWorld = new THREE.Vector3();
   function lanternPosition() {
     group.updateWorldMatrix(true, false);
     return lantern.group.localToWorld(lanternWorld.copy(lantern.localPos));
+  }
+
+  function lanternLights() {
+    group.updateWorldMatrix(true, true);
+    const lights = [lantern, ...sternLamps].filter((lamp) => lamp.light.visible);
+    return lights.map((lamp) => ({
+      pos: lamp.group.localToWorld(new THREE.Vector3().copy(lamp.localPos)),
+      bright: lamp.bright,
+    }));
   }
 
   const bladeWorld = new THREE.Vector3();
@@ -459,6 +487,7 @@ export function createBoat() {
     reset,
     setHull,
     lanternPosition,
+    lanternLights,
     lanternColor: new THREE.Color(0xffb45a),
     headlight,
     blades() {

@@ -86,6 +86,7 @@ export function createWorld(scene) {
   const tmp = new THREE.Color();
   const warm = new THREE.Color(0xffb36a);
   const bambooGlow = { value: 0.3 };
+  const bambooOn = { value: 1 };
   const bambooReflect = { value: 0.5 };
   const treeLight = { value: 1.5 };
 
@@ -403,18 +404,19 @@ export function createWorld(scene) {
       tmp.copy(L.base).lerp(warm, day * 0.25);
       const em = THREE.MathUtils.lerp(L.emNight, L.emDay, day);
       const reach = reachOf.get(L) ?? 1;
+      const glow = bambooGlow.value * bambooOn.value;
       for (const m of L.mats) {
         if (m.userData.role !== 'paper') continue;
         m.color.copy(tmp);
         m.emissive.copy(tmp);
-        m.emissiveIntensity = em * bambooGlow.value * reach;
+        m.emissiveIntensity = em * glow * reach;
       }
     }
 
     for (let i = 0; i < lightPool.length; i++) {
       const item = ranked[i];
       const light = lightPool[i];
-      if (!item) {
+      if (!item || bambooOn.value < 0.5) {
         light.intensity = 0;
         continue;
       }
@@ -466,6 +468,7 @@ export function createWorld(scene) {
   }
 
   function reflections(boatPos, into, yaw = 0) {
+    if (bambooOn.value < 0.5) return into;
     const lanternsNear = lanternsAhead(boatPos, yaw, Number.POSITIVE_INFINITY);
     for (const item of lanternsNear) {
       const reach = lanternReach(Math.sqrt(item.d));
@@ -490,6 +493,7 @@ export function createWorld(scene) {
     mist,
     setTune(next) {
       bambooGlow.value = next.bamboo;
+      bambooOn.value = next.bambooOn === false ? 0 : 1;
       bambooReflect.value = next.water;
       treeLight.value = next.tree;
       mist.uniforms.uFogOn.value = next.fog ? 1 : 0;
