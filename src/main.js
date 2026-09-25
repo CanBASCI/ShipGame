@@ -97,7 +97,8 @@ function hideHint() {
 }
 
 let dayHold = null;
-const tune = { fog: true, bamboo: 1, water: 1, tree: 1, fener: 1, spread: 1 };
+const tune = { fog: true, bamboo: 0.3, water: 0.5, tree: 1.2, fener: 0.5, spread: 0.3 };
+world.setTune(tune);
 
 function dayAmount() {
   if (dayHold != null) return dayHold;

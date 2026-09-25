@@ -44,8 +44,9 @@ const fragmentShader = /* glsl */ `
     vec2 d = p - uBoat.xz;
     float lz = d.x * sy + d.y * cy;
     float lx = d.x * cy - d.y * sy;
-    float behind = clamp(-lz - 1.15, 0.0, 14.0);
-    float wake = exp(-lx * lx * 2.4) * exp(-behind * 0.2) * uSpeed;
+    float behindRaw = -lz - 1.15;
+    float behind = clamp(behindRaw, 0.0, 14.0);
+    float wake = step(0.0, behindRaw) * exp(-lx * lx * 2.4) * exp(-behind * 0.2) * uSpeed;
     h += wake * 0.045 * sin(behind * 3.2 - uTime * 3.0);
     return h;
   }
@@ -138,8 +139,9 @@ const fragmentShader = /* glsl */ `
     vec2 bd = p - uBoat.xz;
     float lz = bd.x * sy + bd.y * cy;
     float lx = bd.x * cy - bd.y * sy;
-    float behind = clamp(-lz - 1.1, 0.0, 12.0);
-    float wake = exp(-lx * lx * 1.8) * exp(-behind * 0.18) * uSpeed;
+    float behindRaw = -lz - 1.1;
+    float behind = clamp(behindRaw, 0.0, 12.0);
+    float wake = step(0.0, behindRaw) * exp(-lx * lx * 1.8) * exp(-behind * 0.18) * uSpeed;
     color += vec3(0.22, 0.16, 0.12) * wake * 0.28;
 
     vec3 toHead = vWorld - uHeadPos;
