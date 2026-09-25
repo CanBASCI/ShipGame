@@ -69,37 +69,10 @@ function makeOarPivot(lock, bladeLocal) {
   return pivot;
 }
 
-function makeRower(black) {
-  const g = new THREE.Group();
-  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.42, 0.82, 10), black);
-  skirt.position.set(0, 0.5, -0.1);
-  skirt.scale.z = 0.7;
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.18, 0.38, 8), black);
-  torso.position.set(0, 1.02, 0.0);
-  torso.rotation.x = -0.12;
-  const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.09, 0.16), black);
-  shoulders.position.set(0, 1.16, 0.0);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 8), black);
-  head.scale.set(1, 1.02, 0.9);
-  head.position.set(0, 1.32, 0.02);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.145, 0.04, 12), black);
-  cap.position.set(0, 1.42, 0.02);
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.012, 14), black);
-  brim.position.set(0, 1.395, 0.03);
-  const armGeo = new THREE.CylinderGeometry(0.04, 0.035, 0.42, 5);
-  const armL = new THREE.Mesh(armGeo, black);
-  armL.position.set(-0.3, 1.05, 0.1);
-  armL.rotation.z = 0.85;
-  armL.rotation.x = 0.55;
-  const armR = new THREE.Mesh(armGeo, black);
-  armR.position.set(0.3, 1.05, 0.1);
-  armR.rotation.z = -0.85;
-  armR.rotation.x = 0.55;
-  g.add(skirt, torso, shoulders, head, cap, brim, armL, armR);
-  return g;
-}
-
-const BOW_LAMP = new THREE.Vector3(0.58, 1.16, 0.7);
+const LAMP_SCALE = 0.85;
+// Stem top on the bow centerline. The mesh origin is the foot.
+const LAMP_FOOT_Y = 0.337;
+const BOW_LAMP = new THREE.Vector3(0, LAMP_FOOT_Y + 0.0955 * LAMP_SCALE, 1.72);
 
 function makeLantern() {
   const g = new THREE.Group();
@@ -126,11 +99,9 @@ export function createBoat() {
     metalness: 0.02,
     side: THREE.DoubleSide,
   });
-  const black = new THREE.MeshBasicMaterial({ color: 0x050308 });
   const body = new THREE.Group();
   body.position.z = FRAME_AHEAD;
   group.add(body);
-  body.add(makeRower(black));
 
   // Locks sit on the gunwale of the loaded hull. Blades are markers for splash height.
   const oarL = makeOarPivot(
@@ -148,10 +119,8 @@ export function createBoat() {
   const lampLoader = new GLTFLoader();
   lampLoader.load('/assets/lantern/Lantern_01_1k.gltf', (gltf) => {
     const model = gltf.scene;
-    // Half of the previous 1.7 fit. The whole mesh stays, including its foot.
-    const s = 0.85;
-    model.scale.setScalar(s);
-    model.position.set(BOW_LAMP.x, BOW_LAMP.y - 0.147 * s, BOW_LAMP.z);
+    model.scale.setScalar(LAMP_SCALE);
+    model.position.set(BOW_LAMP.x, LAMP_FOOT_Y, BOW_LAMP.z);
     model.traverse((obj) => {
       if (!obj.isMesh || !obj.material) return;
       const glass = obj.name === 'Lantern_01_glass' || obj.material.name === 'Lantern_01_glass';

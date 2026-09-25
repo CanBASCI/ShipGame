@@ -23,6 +23,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uCol[16];
   uniform float uGain[16];
   uniform float uTight[16];
+  uniform float uPatch[16];
   uniform sampler2D uNormal;
   uniform sampler2D uRough;
 
@@ -92,7 +93,12 @@ const fragmentShader = /* glsl */ `
       float distL = length(toL);
       float atten = gain / (1.0 + distL * distL * 0.0022);
       vec3 tint = uCol[i];
-      refl += tint * band * gate * shim * atten * 5.2;
+      if (uPatch[i] > 0.5) {
+        float soft = exp(-distL * distL * 2.2);
+        refl += tint * soft * gain * 1.35;
+      } else {
+        refl += tint * band * gate * shim * atten * 5.2;
+      }
     }
 
     float near = smoothstep(0.15, 3.2, viewLen);
@@ -148,6 +154,7 @@ export function createWater() {
     uCol: { value: colors },
     uGain: { value: new Float32Array(MAX_LIGHTS) },
     uTight: { value: new Float32Array(MAX_LIGHTS) },
+    uPatch: { value: new Float32Array(MAX_LIGHTS) },
     uNormal: { value: flatNormal },
     uRough: { value: flatRough },
   };
@@ -183,15 +190,18 @@ export function createWater() {
 export function setWaterLights(uniforms, sources) {
   const gain = uniforms.uGain.value;
   const tight = uniforms.uTight.value;
+  const patch = uniforms.uPatch.value;
   for (let i = 0; i < MAX_LIGHTS; i++) {
     const src = sources[i];
     if (!src) {
       gain[i] = 0;
+      patch[i] = 0;
       continue;
     }
     uniforms.uPos.value[i].copy(src.pos);
     uniforms.uCol.value[i].copy(src.color);
     gain[i] = src.gain;
     tight[i] = src.tight;
+    patch[i] = src.patch ? 1 : 0;
   }
 }

@@ -168,6 +168,7 @@ function update(dt) {
     color: boatLanternColor.clone(),
     gain: 2.7,
     tight: 0.9,
+    patch: true,
   });
   world.reflections(boat.group.position, reflectionScratch);
   setWaterLights(water.uniforms, reflectionScratch);
