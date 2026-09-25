@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 const FRAMES = 5;
-const COUNT = 5;
+const POOL = 7;
 
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -12,7 +12,7 @@ export function createBats(scene) {
   scene.add(group);
 
   const slots = [];
-  for (let i = 0; i < COUNT; i++) {
+  for (let i = 0; i < POOL; i++) {
     const map = new THREE.Texture();
     map.colorSpace = THREE.SRGBColorSpace;
     map.magFilter = THREE.NearestFilter;
@@ -27,7 +27,17 @@ export function createBats(scene) {
       transparent: true,
       depthWrite: false,
       fog: false,
+      alphaTest: 0.5,
     });
+    material.customProgramCacheKey = () => 'bat-solid-black';
+    material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'outgoingLight = diffuseColor.rgb;',
+        `outgoingLight = vec3(0.0);
+         if (diffuseColor.a < 0.5) discard;
+         diffuseColor.a = 1.0;`,
+      );
+    };
     const sprite = new THREE.Sprite(material);
     sprite.visible = false;
     sprite.center.set(0.5, 0.5);
@@ -58,15 +68,16 @@ export function createBats(scene) {
 
   function spawn(time) {
     if (slots.some((slot) => slot.active)) return false;
+    const count = 3 + Math.floor(Math.random() * 5);
     const sign = Math.random() < 0.5 ? 1 : -1;
     const out = Math.random() < 0.5;
-    for (let i = 0; i < COUNT; i++) {
+    for (let i = 0; i < count; i++) {
       const slot = slots[i];
       slot.active = true;
       slot.t0 = time;
       slot.sign = sign;
       slot.out = out;
-      slot.row = (i - 2) * 1.25 + (Math.random() - 0.5) * 0.4;
+      slot.row = (i - (count - 1) / 2) * 1.15 + (Math.random() - 0.5) * 0.35;
       slot.lift = (Math.random() - 0.5) * 0.4;
       slot.fwd = (Math.random() - 0.5) * 0.7;
       slot.sprite.visible = false;
@@ -86,8 +97,9 @@ export function createBats(scene) {
     const dist = 40;
     const halfH = dist * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
     const halfW = halfH * camera.aspect;
-    const inside = halfW * 0.78;
-    const outside = halfW * 1.38;
+    // Visible end sits about a third of the screen width in from the edge.
+    const inside = halfW / 3;
+    const outside = halfW * 1.25;
 
     for (const slot of slots) {
       if (!slot.active) continue;
