@@ -90,28 +90,36 @@ export function createWorld(scene) {
       if (fromQueue && !parent.parent) return;
       const color = blossomHex(side, rng, index, false);
       const tree = sakuraTemplate.clone(true);
-      const scale = 3.15 + rng() * 0.55;
+      const scale = side < 0 ? 2.25 + rng() * 1.55 : 1.95 + rng() * 1.25;
       tree.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
-        const bloom = obj.name.startsWith('Blossom') || obj.material.name === 'Blossom';
+        const bloom = obj.material.name === 'Blossom';
         if (!bloom) return;
         const mat = obj.material.clone();
         mat.color.copy(color);
+        if (mat.map) mat.emissiveMap = mat.map;
         mat.emissive.copy(color);
-        mat.emissiveIntensity = 0.55;
+        mat.emissiveIntensity = 0.42;
         mat.roughness = 0.58;
         mat.metalness = 0;
         mat.userData.dispose = true;
         obj.material = mat;
       });
       tree.position.set(x, 0, z);
-      // The mesh leans toward local -X. Point that over the canal.
-      tree.rotation.y = (side > 0 ? 0 : Math.PI) + (rng() - 0.5) * 0.35;
+      // Local -X is the canopy. Yaw aims that over the canal, then a small
+      // local tilt leans the trunk toward the water. Left and right use
+      // different yaw and lean ranges so the banks are not mirrors.
+      const yawSpan = side < 0 ? 1.2 : 0.72;
+      const yaw = (side > 0 ? 0 : Math.PI) + (rng() - 0.5) * yawSpan;
+      tree.rotation.set(0, yaw, 0);
+      const lean = (side < 0 ? 0.04 : 0.1) + rng() * (side < 0 ? 0.16 : 0.24);
+      tree.rotateZ(lean);
+      tree.rotateX((rng() - 0.5) * (side < 0 ? 0.22 : 0.12));
       tree.scale.setScalar(scale);
       parent.add(tree);
       masses.push({
         chunk: index,
-        pos: new THREE.Vector3(x - side * scale * 1.15, scale * 2.15, index * CHUNK + z),
+        pos: new THREE.Vector3(x - side * scale * 1.25, scale * 1.45, index * CHUNK + z),
         base: color.clone(),
         gain: 0.85,
         tight: 0.42,
@@ -234,12 +242,18 @@ export function createWorld(scene) {
     groundR.userData.uniqueGeo = true;
     root.add(quayL, quayR, lipL, lipR, groundL, groundR);
 
-    for (const side of [-1, 1]) {
-      const n = 6;
-      for (let i = 0; i < n; i++) {
-        const z = (i + 0.12 + rng() * 0.28) * (CHUNK / n);
-        const x = side * (6.9 + rng() * 0.35);
-        addTree(root, x, z, side, rng, index);
+    // Independent walks. The left bank is looser and set back; the right is denser
+    // and closer to the quay, so the two rows never line up.
+    const banks = [
+      { side: -1, z: 0.6 + rng() * 4.2, gap: 6.4, jitter: 4.6, inset: 7.55, spread: 1.85 },
+      { side: 1, z: 2.4 + rng() * 1.8, gap: 4.1, jitter: 2.7, inset: 7.15, spread: 0.95 },
+    ];
+    for (const bank of banks) {
+      let z = bank.z;
+      while (z < CHUNK - 1.1) {
+        const x = bank.side * (bank.inset + rng() * bank.spread);
+        addTree(root, x, z, bank.side, rng, index);
+        z += bank.gap + rng() * bank.jitter;
       }
     }
 

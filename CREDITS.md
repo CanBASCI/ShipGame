@@ -10,13 +10,24 @@ These files are stored in the repo and loaded by the scene.
 - Files: `public/assets/wood/weathered_planks_diff_1k.jpg`, `weathered_planks_nor_gl_1k.jpg`, `weathered_planks_rough_1k.jpg`
 - Use: rowboat hull, seats, and stern post
 
-## Lowpoly Sakura Tree
+## Sakura tree
 
-- Author: Light Game Studio
-- License: CC0
-- Source: https://opengameart.org/content/lowpoly-sakura-tree
 - File: `public/assets/trees/sakura.glb`
-- Use: bank trees. The trunk, branches, canopy, and hanging blossom clusters are meshes from this model. Left-bank blossoms are tinted magenta, purple, and cyan. Right-bank blossoms are tinted fuchsia and amber.
+- Use: every bank tree. Branches lean over the canal. Blossom materials are tinted magenta, purple, and cyan on the left bank and fuchsia and amber on the right. The petal photograph stays on the mesh, so the tint follows the flower instead of a flat card.
+
+### Sakura bark
+
+- Author: Charlotte Baglioni
+- License: CC0
+- Source: https://polyhaven.com/a/sakura_bark
+- Use: trunk and branch color, normal, and roughness inside `sakura.glb`
+
+### Cherry blossom petals
+
+- Author: 玄史生
+- License: CC0
+- Source: https://commons.wikimedia.org/wiki/File:Cherry_Blossom_Twig_Close_up_in_Lane_74,_Sanmin_Road,_Taipei_20150226.jpg
+- Use: petal color and alpha on the hanging flowers inside `sakura.glb`. The photo is cropped onto curved petal meshes.
 
 ## Canal water ripples
 
