@@ -231,7 +231,7 @@ export function createWorld(scene) {
         const mat = obj.material.clone();
         mat.color.copy(color);
         mat.emissive.copy(color);
-        mat.emissiveIntensity = hero ? 2.6 : distant ? 1.35 : 1.9;
+        mat.emissiveIntensity = hero ? 1.95 : distant ? 1.0125 : 1.425;
         mat.side = THREE.DoubleSide;
         mat.userData.dispose = true;
         mat.userData.role = 'paper';
@@ -273,13 +273,13 @@ export function createWorld(scene) {
         chunk: index,
         pos: head,
         base: color,
-        gain: hero ? 2.4 : distant ? 1.35 : 1.7,
+        gain: hero ? 1.8 : distant ? 1.0125 : 1.275,
         tight: hero ? 0.72 : 0.88,
         distance: hero ? 26 : distant ? 11 : 16,
-        intensity: hero ? 22 : distant ? 8 : 13,
+        intensity: hero ? 16.5 : distant ? 6 : 9.75,
         mats,
-        emNight: hero ? 2.8 : distant ? 1.5 : 2.1,
-        emDay: 0.7,
+        emNight: hero ? 2.1 : distant ? 1.125 : 1.575,
+        emDay: 0.525,
       });
     };
     if (lanternTemplate) place(false);

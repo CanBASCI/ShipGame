@@ -34,11 +34,11 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.24, 0.4, 1.08);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
-const ambient = new THREE.AmbientLight(0x1a1028, 0.012);
+const ambient = new THREE.AmbientLight(0x1a1028, 0.009);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0x241430, 0x000000, 0.03);
+const hemi = new THREE.HemisphereLight(0x241430, 0x000000, 0.0225);
 scene.add(hemi);
-const moon = new THREE.DirectionalLight(0x6e6290, 0.045);
+const moon = new THREE.DirectionalLight(0x6e6290, 0.03375);
 moon.position.set(-18, 24, -8);
 scene.add(moon);
 
@@ -166,18 +166,18 @@ function update(dt) {
   reflectionScratch.push({
     pos: lanternPos.clone(),
     color: boatLanternColor.clone(),
-    gain: 2.7,
+    gain: 2.025,
     tight: 0.9,
     patch: true,
   });
   world.reflections(boat.group.position, reflectionScratch);
   setWaterLights(water.uniforms, reflectionScratch);
 
-  ambient.intensity = THREE.MathUtils.lerp(0.012, 0.16, day);
+  ambient.intensity = THREE.MathUtils.lerp(0.009, 0.12, day);
   ambient.color.set(0x1a1028).lerp(new THREE.Color(0xffe0c8), day);
-  hemi.intensity = THREE.MathUtils.lerp(0.025, 0.14, day);
+  hemi.intensity = THREE.MathUtils.lerp(0.01875, 0.105, day);
   hemi.color.set(0x241430).lerp(new THREE.Color(0xd8c2b0), day);
-  moon.intensity = THREE.MathUtils.lerp(0.04, 0.26, day);
+  moon.intensity = THREE.MathUtils.lerp(0.03, 0.195, day);
   moon.color.set(0x6e6290).lerp(new THREE.Color(0xffd2b0), day);
   renderer.toneMappingExposure = 0.74 + day * 0.2;
 

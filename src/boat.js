@@ -76,7 +76,7 @@ const BOW_LAMP = new THREE.Vector3(0, LAMP_FOOT_Y + 0.0955 * LAMP_SCALE, 1.72);
 
 function makeLantern() {
   const g = new THREE.Group();
-  const light = new THREE.PointLight(0xffb45a, 18, 12, 2);
+  const light = new THREE.PointLight(0xffb45a, 13.5, 12, 2);
   light.position.copy(BOW_LAMP);
   g.add(light);
   return { group: g, glowMats: [], light, localPos: BOW_LAMP.clone() };
@@ -127,7 +127,7 @@ export function createBoat() {
       if (!glass) return;
       obj.material = obj.material.clone();
       obj.material.emissive = new THREE.Color(0xffb03a);
-      obj.material.emissiveIntensity = 2.4;
+      obj.material.emissiveIntensity = 1.8;
       lantern.glowMats.push(obj.material);
     });
     lantern.group.add(model);
@@ -312,8 +312,8 @@ export function createBoat() {
     poseOar(oarR, 'right', time);
 
     const flicker = 1 + Math.sin(time * 2.3) * 0.03 + Math.sin(time * 5.1) * 0.015;
-    lantern.light.intensity = (9 - input.day * 4) * flicker;
-    const glow = (2.4 - input.day * 0.8) * flicker;
+    lantern.light.intensity = (6.75 - input.day * 3) * flicker;
+    const glow = (1.8 - input.day * 0.6) * flicker;
     for (const mat of lantern.glowMats) mat.emissiveIntensity = glow;
   }
 
