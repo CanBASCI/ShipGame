@@ -197,6 +197,7 @@ function update(dt) {
 
   const seaTile = water.mesh.userData.seaTile;
   water.mesh.position.z = seaTile ? Math.round(boat.state.z / seaTile) * seaTile : boat.state.z;
+  water.update(time);
   water.uniforms.uTime.value = time;
   water.uniforms.uDay.value = day;
   water.uniforms.uFogColor.value.copy(scene.fog.color);

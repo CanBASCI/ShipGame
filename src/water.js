@@ -4,6 +4,10 @@ const WATER_WIDTH = 13.2;
 const WATER_LENGTH = 240;
 // Same stretch as the old canal plane, so the moon streak still has water under it.
 const SEA_LENGTH = 240;
+// The clip is 249 morphs, one per frame. A short loop of them is enough,
+// played slower than the original so the canal stays calm.
+const SEA_POSES = 24;
+const SEA_LOOP = 26;
 
 const MAX_LIGHTS = 40;
 
@@ -207,19 +211,30 @@ export function createWater() {
   mesh.frustumCulled = false;
   mesh.renderOrder = 1;
 
+  let playSea = null;
   loadSeaSurface().then((sea) => {
     if (!sea) return;
     mesh.geometry.dispose();
     mesh.geometry = sea.geometry;
     mesh.userData.seaTile = sea.tile;
+    playSea = sea.play;
   }).catch((err) => {
     console.error(err);
   });
 
-  return { mesh, uniforms };
+  return {
+    mesh,
+    uniforms,
+    update(time) {
+      if (playSea) playSea(time);
+    },
+  };
 }
 
-// The bin is mostly unused morph targets. Read the base surface and tile it.
+// Each animation frame turns on one morph. Keep a short loop of those poses.
+const SEA_COLS = 48;
+const SEA_ROWS = 24;
+
 async function loadSeaSurface() {
   const [gltf, bin] = await Promise.all([
     fetch('/assets/water/sea_part/scene.gltf').then((res) => res.json()),
@@ -229,44 +244,148 @@ async function loadSeaSurface() {
   const srcPos = readVec3(gltf, bin, primitive.attributes.POSITION);
   const world = seaMatrix(gltf);
   const v = new THREE.Vector3();
+  const origin = new THREE.Vector3().applyMatrix4(world);
+  const yScale = new THREE.Vector3(0, 1, 0).applyMatrix4(world).sub(origin).y;
   let minX = Infinity;
   let maxX = -Infinity;
-  let maxY = -Infinity;
   let minZ = Infinity;
   let maxZ = -Infinity;
-  const baked = new Float32Array(srcPos.length);
+  const bakedY = new Float32Array(srcPos.length / 3);
+  const bakedX = new Float32Array(srcPos.length / 3);
+  const bakedZ = new Float32Array(srcPos.length / 3);
   for (let i = 0; i < srcPos.length; i += 3) {
     v.set(srcPos[i], srcPos[i + 1], srcPos[i + 2]).applyMatrix4(world);
-    baked[i] = v.x;
-    baked[i + 1] = v.y;
-    baked[i + 2] = v.z;
+    const vert = i / 3;
+    bakedX[vert] = v.x;
+    bakedY[vert] = v.y;
+    bakedZ[vert] = v.z;
     minX = Math.min(minX, v.x);
     maxX = Math.max(maxX, v.x);
-    maxY = Math.max(maxY, v.y);
     minZ = Math.min(minZ, v.z);
     maxZ = Math.max(maxZ, v.z);
   }
   const sizeX = maxX - minX;
   const sizeZ = maxZ - minZ;
   if (sizeX < 1e-4 || sizeZ < 1e-4) return null;
-  const cols = 48;
-  const rows = 24;
-  const heights = new Float32Array(cols * rows);
-  const counts = new Uint16Array(cols * rows);
-  for (let i = 0; i < baked.length; i += 3) {
-    const cx = Math.min(cols - 1, Math.max(0, Math.round(((baked[i] - minX) / sizeX) * (cols - 1))));
-    const cz = Math.min(rows - 1, Math.max(0, Math.round(((baked[i + 2] - minZ) / sizeZ) * (rows - 1))));
-    const cell = cz * cols + cx;
-    heights[cell] += baked[i + 1];
+  const cellCount = SEA_COLS * SEA_ROWS;
+  const counts = new Uint16Array(cellCount);
+  const baseSum = new Float32Array(cellCount);
+  const cellOf = new Uint16Array(bakedY.length);
+  for (let vert = 0; vert < bakedY.length; vert += 1) {
+    const cx = Math.min(SEA_COLS - 1, Math.max(0, Math.round(((bakedX[vert] - minX) / sizeX) * (SEA_COLS - 1))));
+    const cz = Math.min(SEA_ROWS - 1, Math.max(0, Math.round(((bakedZ[vert] - minZ) / sizeZ) * (SEA_ROWS - 1))));
+    const cell = cz * SEA_COLS + cx;
+    cellOf[vert] = cell;
+    baseSum[cell] += bakedY[vert];
     counts[cell] += 1;
   }
+  const frames = [];
+  for (let pose = 0; pose < SEA_POSES; pose += 1) {
+    const frame = Math.round((pose * 248) / SEA_POSES);
+    const sum = new Float32Array(baseSum);
+    if (frame > 0 && frame < 249) {
+      const deltaY = morphYReader(gltf, bin, primitive.targets[frame - 1].POSITION);
+      for (let vert = 0; vert < bakedY.length; vert += 1) {
+        sum[cellOf[vert]] += deltaY(vert) * yScale;
+      }
+    }
+    frames.push(finishSeaGrid(sum, counts));
+  }
+  const copies = Math.ceil(SEA_LENGTH / sizeZ);
+  const positions = new Float32Array(SEA_COLS * SEA_ROWS * copies * 3);
+  const normals = new Float32Array(positions.length);
+  const indices = new Uint32Array((SEA_COLS - 1) * (SEA_ROWS - 1) * 6 * copies);
+  let indexAt = 0;
+  for (let copy = 0; copy < copies; copy += 1) {
+    const z0 = -SEA_LENGTH / 2 + copy * sizeZ;
+    const base = copy * SEA_COLS * SEA_ROWS;
+    for (let cz = 0; cz < SEA_ROWS; cz += 1) {
+      for (let cx = 0; cx < SEA_COLS; cx += 1) {
+        const o = (base + cz * SEA_COLS + cx) * 3;
+        positions[o] = (cx / (SEA_COLS - 1) - 0.5) * WATER_WIDTH;
+        positions[o + 2] = z0 + (cz / (SEA_ROWS - 1)) * sizeZ;
+      }
+    }
+    for (let cz = 0; cz < SEA_ROWS - 1; cz += 1) {
+      for (let cx = 0; cx < SEA_COLS - 1; cx += 1) {
+        const a = base + cz * SEA_COLS + cx;
+        indices[indexAt] = a;
+        indices[indexAt + 1] = a + SEA_COLS;
+        indices[indexAt + 2] = a + 1;
+        indices[indexAt + 3] = a + 1;
+        indices[indexAt + 4] = a + SEA_COLS;
+        indices[indexAt + 5] = a + SEA_COLS + 1;
+        indexAt += 6;
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  const position = new THREE.BufferAttribute(positions, 3);
+  const normal = new THREE.BufferAttribute(normals, 3);
+  geo.setAttribute('position', position);
+  geo.setAttribute('normal', normal);
+  geo.setIndex(new THREE.BufferAttribute(indices, 1));
+  const mixed = new Float32Array(cellCount);
+  const applyPose = (pose) => {
+    let crest = -Infinity;
+    for (let i = 0; i < cellCount; i += 1) crest = Math.max(crest, pose[i]);
+    const dx = WATER_WIDTH / (SEA_COLS - 1);
+    const dz = sizeZ / (SEA_ROWS - 1);
+    for (let copy = 0; copy < copies; copy += 1) {
+      const base = copy * cellCount;
+      for (let cz = 0; cz < SEA_ROWS; cz += 1) {
+        for (let cx = 0; cx < SEA_COLS; cx += 1) {
+          const i = cz * SEA_COLS + cx;
+          const o = (base + i) * 3;
+          positions[o + 1] = pose[i] - crest;
+          const hL = pose[cz * SEA_COLS + Math.max(0, cx - 1)];
+          const hR = pose[cz * SEA_COLS + Math.min(SEA_COLS - 1, cx + 1)];
+          const hD = pose[Math.max(0, cz - 1) * SEA_COLS + cx];
+          const hU = pose[Math.min(SEA_ROWS - 1, cz + 1) * SEA_COLS + cx];
+          const sx = (hR - hL) / ((cx === 0 || cx === SEA_COLS - 1) ? dx : 2 * dx);
+          const sz = (hU - hD) / ((cz === 0 || cz === SEA_ROWS - 1) ? dz : 2 * dz);
+          const nx = -sx;
+          const ny = 1;
+          const nz = -sz;
+          const len = Math.hypot(nx, ny, nz) || 1;
+          normals[o] = nx / len;
+          normals[o + 1] = ny / len;
+          normals[o + 2] = nz / len;
+        }
+      }
+    }
+    position.needsUpdate = true;
+    normal.needsUpdate = true;
+  };
+  applyPose(frames[0]);
+  return {
+    geometry: geo,
+    tile: sizeZ,
+    play(time) {
+      const spun = ((time % SEA_LOOP) + SEA_LOOP) % SEA_LOOP / SEA_LOOP;
+      const f = spun * frames.length;
+      const i0 = Math.floor(f) % frames.length;
+      const i1 = (i0 + 1) % frames.length;
+      const t = f - Math.floor(f);
+      const a = frames[i0];
+      const b = frames[i1];
+      for (let i = 0; i < cellCount; i += 1) mixed[i] = a[i] + (b[i] - a[i]) * t;
+      applyPose(mixed);
+    },
+  };
+}
+
+function finishSeaGrid(sum, counts) {
+  const cols = SEA_COLS;
+  const rows = SEA_ROWS;
+  const heights = new Float32Array(cols * rows);
   for (let i = 0; i < heights.length; i += 1) {
-    if (counts[i] > 0) heights[i] /= counts[i];
+    if (counts[i] > 0) heights[i] = sum[i] / counts[i];
   }
   for (let pass = 0; pass < 4; pass += 1) {
     for (let i = 0; i < heights.length; i += 1) {
       if (counts[i] > 0) continue;
-      let sum = 0;
+      let total = 0;
       let n = 0;
       const cz = Math.floor(i / cols);
       const cx = i - cz * cols;
@@ -278,11 +397,11 @@ async function loadSeaSurface() {
           const ni = nz * cols + nx;
           if (counts[ni] === 0 && pass === 0) continue;
           if (counts[ni] === 0 && heights[ni] === 0) continue;
-          sum += heights[ni];
+          total += heights[ni];
           n += 1;
         }
       }
-      if (n > 0) heights[i] = sum / n;
+      if (n > 0) heights[i] = total / n;
     }
   }
   // The patch edges do not meet. Ease the end of each tile into its start
@@ -296,41 +415,16 @@ async function loadSeaSurface() {
       heights[i] = heights[i] * (1 - w) + heights[cx] * w;
     }
   }
-  let crest = -Infinity;
-  for (let i = 0; i < heights.length; i += 1) crest = Math.max(crest, heights[i]);
-  const copies = Math.ceil(SEA_LENGTH / sizeZ);
-  const positions = new Float32Array(cols * rows * copies * 3);
-  const indices = new Uint32Array((cols - 1) * (rows - 1) * 6 * copies);
-  let indexAt = 0;
-  for (let copy = 0; copy < copies; copy += 1) {
-    const z0 = -SEA_LENGTH / 2 + copy * sizeZ;
-    const base = copy * cols * rows;
-    for (let cz = 0; cz < rows; cz += 1) {
-      for (let cx = 0; cx < cols; cx += 1) {
-        const o = (base + cz * cols + cx) * 3;
-        positions[o] = (cx / (cols - 1) - 0.5) * WATER_WIDTH;
-        positions[o + 1] = heights[cz * cols + cx] - crest;
-        positions[o + 2] = z0 + (cz / (rows - 1)) * sizeZ;
-      }
-    }
-    for (let cz = 0; cz < rows - 1; cz += 1) {
-      for (let cx = 0; cx < cols - 1; cx += 1) {
-        const a = base + cz * cols + cx;
-        indices[indexAt] = a;
-        indices[indexAt + 1] = a + cols;
-        indices[indexAt + 2] = a + 1;
-        indices[indexAt + 3] = a + 1;
-        indices[indexAt + 4] = a + cols;
-        indices[indexAt + 5] = a + cols + 1;
-        indexAt += 6;
-      }
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geo.setIndex(new THREE.BufferAttribute(indices, 1));
-  geo.computeVertexNormals();
-  return { geometry: geo, tile: sizeZ };
+  return heights;
+}
+
+function morphYReader(gltf, bin, accessorIndex) {
+  const accessor = gltf.accessors[accessorIndex];
+  const view = gltf.bufferViews[accessor.bufferView];
+  const start = (view.byteOffset || 0) + (accessor.byteOffset || 0);
+  const stride = view.byteStride || 12;
+  const data = new DataView(bin);
+  return (index) => data.getFloat32(start + index * stride + 4, true);
 }
 
 function seaMatrix(gltf) {
