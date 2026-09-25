@@ -49,7 +49,33 @@ export function createWorld(scene) {
   loader.load(
     '/assets/trees/sakura.glb',
     (gltf) => {
-      sakuraTemplate = gltf.scene;
+      const model = gltf.scene;
+      model.updateMatrixWorld(true);
+      let trunkMesh = null;
+      let trunkSpan = 0;
+      model.traverse((obj) => {
+        if (!obj.isMesh || obj.userData.role !== 'dark') return;
+        const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+        const span = Math.max(size.x, size.y, size.z);
+        if (span > trunkSpan) {
+          trunkSpan = span;
+          trunkMesh = obj;
+          trunkMesh.userData.axis = size;
+        }
+      });
+      if (trunkMesh) {
+        const size = trunkMesh.userData.axis;
+        // The file's trunk is a long cylinder. Turn that axis to world up
+        // before any bank yaw is applied.
+        if (size.x >= size.y && size.x >= size.z) model.rotation.z = Math.PI / 2;
+        else if (size.z > size.y && size.z >= size.x) model.rotation.x = -Math.PI / 2;
+        model.updateMatrixWorld(true);
+        const base = new THREE.Box3().setFromObject(trunkMesh);
+        model.position.y -= base.min.y;
+      }
+      const pivot = new THREE.Group();
+      pivot.add(model);
+      sakuraTemplate = pivot;
       const jobs = treeQueue.splice(0, treeQueue.length);
       for (const job of jobs) job();
     },
@@ -95,6 +121,17 @@ export function createWorld(scene) {
       tree.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
         // Blossom clusters ship with the file as role "secondary".
+        // The trunk material in the file is nearly black, so it vanished
+        // into the bank and the crown read as a horizontal mass.
+        if (obj.userData.role === 'dark') {
+          const bark = obj.material.clone();
+          bark.color.set(0x6a4632);
+          bark.emissive.set(0x3a2216);
+          bark.emissiveIntensity = 0.55;
+          bark.userData.dispose = true;
+          obj.material = bark;
+          return;
+        }
         if (obj.userData.role !== 'secondary') return;
         const mat = obj.material.clone();
         mat.color.copy(color);
@@ -104,14 +141,14 @@ export function createWorld(scene) {
         obj.material = mat;
       });
       tree.position.set(x, 0, z);
-      // The file's trunk is already on Y. Yaw and a small local tilt aim
-      // some trunks over the canal. Left and right ranges stay different.
+      // Yaw aims the crown. A small local tilt leans the trunk toward the
+      // canal without laying it down. Left and right ranges stay different.
       const yawSpan = side < 0 ? 1.2 : 0.72;
       const yaw = (side > 0 ? 0 : Math.PI) + (rng() - 0.5) * yawSpan;
       tree.rotation.set(0, yaw, 0);
-      const lean = (side < 0 ? 0.04 : 0.1) + rng() * (side < 0 ? 0.16 : 0.24);
+      const lean = (side < 0 ? 0.05 : 0.08) + rng() * (side < 0 ? 0.1 : 0.14);
       tree.rotateZ(lean);
-      tree.rotateX((rng() - 0.5) * (side < 0 ? 0.22 : 0.12));
+      tree.rotateX((rng() - 0.5) * (side < 0 ? 0.1 : 0.06));
       tree.scale.setScalar(scale);
       parent.add(tree);
       masses.push({
