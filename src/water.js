@@ -4,10 +4,10 @@ const WATER_WIDTH = 13.2;
 const WATER_LENGTH = 240;
 // Same stretch as the old canal plane, so the moon streak still has water under it.
 const SEA_LENGTH = 240;
-// The clip is 249 morphs, one per frame. A short loop of them is enough,
-// played slower than the original so the canal stays calm.
-const SEA_POSES = 24;
-const SEA_LOOP = 26;
+// One morph per frame, in order. Play that run slowly. Sparse blends were
+// lifting the whole canal; the average height is removed so only the shape moves.
+const SEA_FRAMES = 249;
+const SEA_LOOP = 16;
 
 const MAX_LIGHTS = 40;
 
@@ -280,16 +280,26 @@ async function loadSeaSurface() {
     counts[cell] += 1;
   }
   const frames = [];
-  for (let pose = 0; pose < SEA_POSES; pose += 1) {
-    const frame = Math.round((pose * 248) / SEA_POSES);
+  let waterline = 0;
+  for (let frame = 0; frame < SEA_FRAMES; frame += 1) {
     const sum = new Float32Array(baseSum);
-    if (frame > 0 && frame < 249) {
+    if (frame > 0) {
       const deltaY = morphYReader(gltf, bin, primitive.targets[frame - 1].POSITION);
       for (let vert = 0; vert < bakedY.length; vert += 1) {
         sum[cellOf[vert]] += deltaY(vert) * yScale;
       }
     }
-    frames.push(finishSeaGrid(sum, counts));
+    const grid = finishSeaGrid(sum, counts);
+    let mean = 0;
+    let maxH = -Infinity;
+    for (let i = 0; i < grid.length; i += 1) {
+      mean += grid[i];
+      maxH = Math.max(maxH, grid[i]);
+    }
+    mean /= grid.length;
+    if (frame === 0) waterline = mean - maxH;
+    for (let i = 0; i < grid.length; i += 1) grid[i] -= mean;
+    frames.push(grid);
   }
   const copies = Math.ceil(SEA_LENGTH / sizeZ);
   const positions = new Float32Array(SEA_COLS * SEA_ROWS * copies * 3);
@@ -327,8 +337,9 @@ async function loadSeaSurface() {
   geo.setIndex(new THREE.BufferAttribute(indices, 1));
   const mixed = new Float32Array(cellCount);
   const applyPose = (pose) => {
-    let crest = -Infinity;
-    for (let i = 0; i < cellCount; i += 1) crest = Math.max(crest, pose[i]);
+    let mean = 0;
+    for (let i = 0; i < cellCount; i += 1) mean += pose[i];
+    mean /= cellCount;
     const dx = WATER_WIDTH / (SEA_COLS - 1);
     const dz = sizeZ / (SEA_ROWS - 1);
     for (let copy = 0; copy < copies; copy += 1) {
@@ -337,7 +348,7 @@ async function loadSeaSurface() {
         for (let cx = 0; cx < SEA_COLS; cx += 1) {
           const i = cz * SEA_COLS + cx;
           const o = (base + i) * 3;
-          positions[o + 1] = pose[i] - crest;
+          positions[o + 1] = pose[i] - mean + waterline;
           const hL = pose[cz * SEA_COLS + Math.max(0, cx - 1)];
           const hR = pose[cz * SEA_COLS + Math.min(SEA_COLS - 1, cx + 1)];
           const hD = pose[Math.max(0, cz - 1) * SEA_COLS + cx];
