@@ -19,6 +19,10 @@ const fragmentShader = /* glsl */ `
   uniform float uSpeed;
   uniform vec3 uFogColor;
   uniform float uFogDensity;
+  uniform vec3 uHeadPos;
+  uniform vec3 uHeadDir;
+  uniform float uHead;
+  uniform float uHeadSpread;
   uniform vec3 uPos[${MAX_LIGHTS}];
   uniform vec3 uCol[${MAX_LIGHTS}];
   uniform float uGain[${MAX_LIGHTS}];
@@ -138,6 +142,15 @@ const fragmentShader = /* glsl */ `
     float wake = exp(-lx * lx * 1.8) * exp(-behind * 0.18) * uSpeed;
     color += vec3(0.22, 0.16, 0.12) * wake * 0.28;
 
+    vec3 toHead = vWorld - uHeadPos;
+    float headAhead = dot(toHead, uHeadDir);
+    float headSide = length(toHead - uHeadDir * headAhead);
+    float headRadius = 0.05 + max(headAhead, 0.0) * uHeadSpread;
+    float headCone = exp(-pow(headSide / max(headRadius, 0.08), 2.0));
+    headCone *= step(0.0, headAhead);
+    float headFall = 1.0 / (1.0 + headAhead * headAhead * 0.0035);
+    color += vec3(1.0, 0.78, 0.46) * headCone * headFall * uHead * 0.42;
+
     float fd = length(vWorld - cameraPosition);
     float fogF = 1.0 - exp(-uFogDensity * uFogDensity * fd * fd);
     color = mix(color, uFogColor, clamp(fogF, 0.0, 1.0));
@@ -173,6 +186,10 @@ export function createWater() {
     uSpeed: { value: 0 },
     uFogColor: { value: new THREE.Color(0x0c0612) },
     uFogDensity: { value: 0.034 },
+    uHeadPos: { value: new THREE.Vector3() },
+    uHeadDir: { value: new THREE.Vector3(0, 0, 1) },
+    uHead: { value: 0 },
+    uHeadSpread: { value: Math.tan(0.5) },
     uPos: { value: positions },
     uCol: { value: colors },
     uGain: { value: new Float32Array(MAX_LIGHTS) },

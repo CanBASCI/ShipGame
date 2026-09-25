@@ -76,13 +76,9 @@ const BOW_LAMP = new THREE.Vector3(0, LAMP_FOOT_Y + 0.0955 * LAMP_SCALE, 1.72);
 
 function makeLantern() {
   const g = new THREE.Group();
-  // A flashlight cone: thin at the lamp, wider farther ahead. Intensity,
-  // reach, and decay stay the same as the old point light.
-  const light = new THREE.SpotLight(0xffb45a, 10.125, 12, 0.45, 0.6, 2);
+  const light = new THREE.PointLight(0xffb45a, 10.125, 12, 2);
   light.position.copy(BOW_LAMP);
-  light.target.position.set(BOW_LAMP.x, 0.05, BOW_LAMP.z + 9);
   g.add(light);
-  g.add(light.target);
   return { group: g, glowMats: [], light, localPos: BOW_LAMP.clone() };
 }
 
@@ -120,6 +116,12 @@ export function createBoat() {
 
   const lantern = makeLantern();
   body.add(lantern.group);
+  // Forward beam only. Thin at the bow, wider ahead. Off unless moving forward.
+  const headlight = new THREE.SpotLight(0xffe2b8, 0, 52, 0.5, 0.55, 2);
+  headlight.position.set(0, 0.72, 1.9);
+  headlight.target.position.set(0, 0.2, 18);
+  group.add(headlight);
+  group.add(headlight.target);
   const lampLoader = new GLTFLoader();
   lampLoader.load('/assets/lantern/Lantern_01_1k.gltf', (gltf) => {
     const model = gltf.scene;
@@ -317,6 +319,7 @@ export function createBoat() {
 
     const flicker = 1 + Math.sin(time * 2.3) * 0.03 + Math.sin(time * 5.1) * 0.015;
     lantern.light.intensity = (5.0625 - input.day * 2.25) * flicker;
+    headlight.intensity = input.forward ? 42 : 0;
     const glow = (1.35 - input.day * 0.45) * flicker;
     for (const mat of lantern.glowMats) mat.emissiveIntensity = glow;
   }
@@ -358,6 +361,7 @@ export function createBoat() {
     reset,
     lanternPosition,
     lanternColor: new THREE.Color(0xffb45a),
+    headlight,
     blades() {
       group.updateWorldMatrix(true, true);
       const point = (pivot) => {

@@ -590,6 +590,8 @@ function createMist() {
     uFwd: { value: new THREE.Vector3(0, 0, 1) },
     uMoon: { value: new THREE.Vector3(0, 9.2, 30) },
     uFogOn: { value: 1 },
+    uHead: { value: 0 },
+    uHeadSpread: { value: Math.tan(0.5) },
   };
   const vertexShader = /* glsl */ `
     varying vec2 vUv;
@@ -615,6 +617,8 @@ function createMist() {
     uniform vec3 uFwd;
     uniform vec3 uMoon;
     uniform float uFogOn;
+    uniform float uHead;
+    uniform float uHeadSpread;
     uniform sampler2D uMap;
     void main() {
       vec2 uv = vUv * vec2(0.62, 0.7) + vec2(0.19, 0.14);
@@ -626,10 +630,13 @@ function createMist() {
       cover *= edge;
       float along = (vWorld.x - uBoat.x) * sin(uYaw) + (vWorld.z - uBoat.z) * cos(uYaw);
       float dist = smoothstep(32.0, 78.0, along);
-      vec3 toBow = vWorld - uBow;
-      float bowDist = max(length(toBow), 0.001);
-      float facing = dot(toBow / bowDist, normalize(uFwd));
-      float beam = pow(clamp(facing, 0.0, 1.0), 1.7) * exp(-bowDist * 0.022);
+      vec3 fwd = normalize(uFwd);
+      vec3 toHead = vWorld - uBow;
+      float ahead = dot(toHead, fwd);
+      float side = length(toHead - fwd * ahead);
+      float radius = 0.05 + max(ahead, 0.0) * uHeadSpread;
+      float beam = exp(-pow(side / max(radius, 0.08), 2.0));
+      beam *= step(0.0, ahead) * exp(-max(ahead, 0.0) * 0.028) * uHead;
       vec3 toMoon = normalize(uMoon - vec3(0.0, 1.2, uBoat.z));
       float moon = clamp(toMoon.y * 0.85 + 0.15, 0.0, 1.0) * (0.42 + 0.58 * clamp(vWorld.y / 9.0, 0.0, 1.0));
       float night = 1.0 - uDay;
@@ -653,6 +660,8 @@ function createMist() {
       uFwd: uniforms.uFwd,
       uMoon: uniforms.uMoon,
       uFogOn: uniforms.uFogOn,
+      uHead: uniforms.uHead,
+      uHeadSpread: uniforms.uHeadSpread,
       uMap: { value: map },
     },
     transparent: true,

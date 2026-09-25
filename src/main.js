@@ -61,6 +61,8 @@ const moonColor = new THREE.Color(0xd5e0ff);
 // Median of Sivaln's moon photograph, so the streak matches the disc.
 const moonReflect = new THREE.Color(0xe5bc7b);
 const moonStreak = new THREE.Vector3();
+const headPos = new THREE.Vector3();
+const headAim = new THREE.Vector3();
 const moonlight = new THREE.DirectionalLight(moonColor, 0);
 moonlight.position.set(0, MOON_HEIGHT, MOON_AHEAD);
 scene.add(moonlight);
@@ -95,6 +97,7 @@ function hideHint() {
 }
 
 let dayHold = null;
+const tune = { fog: true, bamboo: 1, water: 1, tree: 1, fener: 1, spread: 1 };
 
 function dayAmount() {
   if (dayHold != null) return dayHold;
@@ -174,6 +177,24 @@ function update(dt) {
   if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
   world.update(boat.group.position, time, day, boat.state.yaw);
+  boat.headlight.getWorldPosition(headPos);
+  boat.headlight.target.getWorldPosition(headAim);
+  headAim.sub(headPos);
+  if (headAim.lengthSq() > 1e-6) headAim.normalize();
+  const movingForward = boat.headlight.intensity > 0;
+  const headAngle = Math.min(Math.PI * 0.5 - 0.02, 0.5 * tune.spread);
+  boat.headlight.angle = headAngle;
+  if (movingForward) boat.headlight.intensity = 42 * tune.fener;
+  const headAmt = movingForward ? tune.fener : 0;
+  const headSpread = Math.tan(headAngle);
+  world.mist.uniforms.uBow.value.copy(headPos);
+  world.mist.uniforms.uFwd.value.copy(headAim);
+  world.mist.uniforms.uHead.value = headAmt;
+  world.mist.uniforms.uHeadSpread.value = headSpread;
+  water.uniforms.uHeadPos.value.copy(headPos);
+  water.uniforms.uHeadDir.value.copy(headAim);
+  water.uniforms.uHead.value = headAmt;
+  water.uniforms.uHeadSpread.value = headSpread;
   scene.fog.color.copy(fogNight).lerp(fogDay, day);
   scene.fog.density = world.fogDensity.value;
   world.fogColor.copy(scene.fog.color);
@@ -245,6 +266,7 @@ function frame(now) {
   frames += 1;
   if (frames > 8) window.__ship.ready = true;
   if (dayHold == null) daySlider.value = String(dayAmount());
+  paintTune();
   requestAnimationFrame(frame);
 }
 
@@ -258,13 +280,21 @@ window.addEventListener('error', (event) => {
   errors.push(String(event.message || event.error || 'error'));
 });
 
-const tune = { fog: true, bamboo: 1, water: 1, tree: 1 };
 const TUNE_STEP = 1.1;
 const fogToggle = document.getElementById('fog-toggle');
 const daySlider = document.getElementById('day-slider');
+const dayVal = document.getElementById('day-val');
+
+function paintTune() {
+  for (const el of document.querySelectorAll('.tune-val')) {
+    el.textContent = tune[el.dataset.val].toFixed(1);
+  }
+  dayVal.textContent = dayAmount().toFixed(1);
+}
 
 function applyTune() {
   world.setTune(tune);
+  paintTune();
 }
 
 fogToggle.addEventListener('click', () => {
@@ -284,6 +314,7 @@ document.getElementById('tune').addEventListener('click', (event) => {
 
 function holdDayFromSlider() {
   dayHold = Number(daySlider.value);
+  paintTune();
 }
 
 daySlider.addEventListener('input', holdDayFromSlider);
