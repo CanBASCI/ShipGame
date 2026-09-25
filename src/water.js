@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-const MAX_LIGHTS = 16;
+const MAX_LIGHTS = 40;
 
 const vertexShader = /* glsl */ `
   varying vec3 vWorld;
@@ -19,11 +19,11 @@ const fragmentShader = /* glsl */ `
   uniform float uSpeed;
   uniform vec3 uFogColor;
   uniform float uFogDensity;
-  uniform vec3 uPos[16];
-  uniform vec3 uCol[16];
-  uniform float uGain[16];
-  uniform float uTight[16];
-  uniform float uPatch[16];
+  uniform vec3 uPos[${MAX_LIGHTS}];
+  uniform vec3 uCol[${MAX_LIGHTS}];
+  uniform float uGain[${MAX_LIGHTS}];
+  uniform float uTight[${MAX_LIGHTS}];
+  uniform float uPatch[${MAX_LIGHTS}];
   uniform sampler2D uNormal;
   uniform sampler2D uRough;
 
@@ -76,7 +76,7 @@ const fragmentShader = /* glsl */ `
     float viewLen = length(viewFwd);
     vec2 vd = viewFwd / max(viewLen, 0.001);
 
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < ${MAX_LIGHTS}; i++) {
       float gain = uGain[i];
       if (gain < 0.001) continue;
       vec2 lp = uPos[i].xz;

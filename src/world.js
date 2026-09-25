@@ -466,9 +466,8 @@ export function createWorld(scene) {
   }
 
   function reflections(boatPos, into, yaw = 0) {
-    const lanternsNear = lanternsAhead(boatPos, yaw, 10);
+    const lanternsNear = lanternsAhead(boatPos, yaw, Number.POSITIVE_INFINITY);
     for (const item of lanternsNear) {
-      if (into.length >= 15) break;
       const reach = lanternReach(Math.sqrt(item.d));
       tmp.copy(item.L.base).lerp(warm, dayUniform.value * 0.4);
       into.push({
