@@ -393,18 +393,24 @@ export function createWorld(scene) {
       if (!chunks.has(index)) buildChunk(index);
     }
 
+    const ranked = lanternsAhead(boatPos, yaw, 10);
+    const reachOf = new Map();
+    for (const item of ranked) {
+      reachOf.set(item.L, lanternReach(Math.sqrt(item.d)));
+    }
+
     for (const L of lanterns) {
       tmp.copy(L.base).lerp(warm, day * 0.25);
       const em = THREE.MathUtils.lerp(L.emNight, L.emDay, day);
+      const reach = reachOf.get(L) ?? 1;
       for (const m of L.mats) {
         if (m.userData.role !== 'paper') continue;
         m.color.copy(tmp);
         m.emissive.copy(tmp);
-        m.emissiveIntensity = em * bambooGlow.value;
+        m.emissiveIntensity = em * bambooGlow.value * reach;
       }
     }
 
-    const ranked = lanternsAhead(boatPos, yaw, 10);
     for (let i = 0; i < lightPool.length; i++) {
       const item = ranked[i];
       const light = lightPool[i];
@@ -412,11 +418,12 @@ export function createWorld(scene) {
         light.intensity = 0;
         continue;
       }
+      const reach = reachOf.get(item.L);
       tmp.copy(item.L.base).lerp(warm, day * 0.4);
       light.color.copy(tmp);
       light.position.copy(item.L.pos);
       light.distance = item.L.distance;
-      light.intensity = item.L.intensity * THREE.MathUtils.lerp(1, 0.38, day);
+      light.intensity = item.L.intensity * THREE.MathUtils.lerp(1, 0.38, day) * reach;
     }
 
     sky.mesh.position.copy(boatPos);
@@ -450,15 +457,24 @@ export function createWorld(scene) {
     return ahead;
   }
 
+  // Lanterns within 12m of the boat stay at full strength. Past that, each
+  // further 8m is one small step down. The scale never reaches zero.
+  function lanternReach(dist) {
+    if (dist <= 12) return 1;
+    const steps = 1 + Math.floor((dist - 12) / 8);
+    return Math.max(0.42, Math.pow(0.9, steps));
+  }
+
   function reflections(boatPos, into, yaw = 0) {
     const lanternsNear = lanternsAhead(boatPos, yaw, 10);
     for (const item of lanternsNear) {
       if (into.length >= 15) break;
+      const reach = lanternReach(Math.sqrt(item.d));
       tmp.copy(item.L.base).lerp(warm, dayUniform.value * 0.4);
       into.push({
         pos: item.L.pos,
         color: tmp.clone(),
-        gain: item.L.gain * bambooReflect.value,
+        gain: item.L.gain * bambooReflect.value * reach,
         tight: item.L.tight,
       });
     }
