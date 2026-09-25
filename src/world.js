@@ -125,6 +125,17 @@ export function createWorld(scene) {
     return col;
   }
 
+  // Extra size, chosen once from the tree's place on the bank. It does not
+  // draw from the placement rng, so spacing and lean stay where they are.
+  // The factor is against the size before this enlargement, not stacked on it.
+  function treeGrowth(index, side, x, z) {
+    let h = (index * 374761393 + (side < 0 ? 11 : 97) + Math.round(x * 100) * 668265263 + Math.round(z * 100) * 1442695041) | 0;
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+    h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+    h = (h ^ (h >>> 16)) >>> 0;
+    return 2.4 + (h % 10001) / 10000 * 0.3;
+  }
+
   function addTree(parent, x, z, side, rng, index) {
     const place = (fromQueue) => {
       if (fromQueue && !parent.parent) return;
@@ -133,7 +144,7 @@ export function createWorld(scene) {
       const variant = sakuraVariants[Math.floor(rng() * sakuraVariants.length)];
       const tree = variant.clone(true);
       // Each variant is already about 5.4m with its roots at y=0.
-      const scale = side < 0 ? 0.78 + rng() * 0.36 : 0.62 + rng() * 0.28;
+      const scale = (side < 0 ? 0.78 + rng() * 0.36 : 0.62 + rng() * 0.28) * treeGrowth(index, side, x, z);
       // A slight cool shift on the left bank and a slight warm shift on the right.
       // Both stay near white so the petal and leaf photo is what you see.
       const warmth = side < 0 ? 0xf3f6ff : 0xfff4ea;
@@ -159,6 +170,7 @@ export function createWorld(scene) {
       tree.rotateZ(lean);
       tree.rotateX((rng() - 0.5) * (side < 0 ? 0.1 : 0.06));
       // The file stores the fit-to-5.4m scale on the tree root. Multiply it.
+      // Roots stay at y=0, so a larger scale still meets the bank.
       tree.scale.multiplyScalar(scale);
       parent.add(tree);
       masses.push({
@@ -226,8 +238,27 @@ export function createWorld(scene) {
         obj.material = mat;
         mats.push(mat);
       });
-      const s = hero ? 1.28 : distant ? 0.62 : 0.88;
+      // Post, arm, and head share this root, so one scale shrinks the whole lantern.
+      // The head stays at the higher hang. The shaft is stretched from the ground
+      // up to that hang, so the post still meets the lamp.
+      const s = (hero ? 1.28 : distant ? 0.62 : 0.88) * 0.75;
+      const headLift = 1.05;
+      const postTop = 2.35;
+      const postScaleY = (postTop + headLift) / postTop;
       model.scale.setScalar(s);
+      model.traverse((obj) => {
+        if (obj.parent !== model) return;
+        if (obj.name === 'Post') {
+          obj.scale.y = postScaleY;
+          obj.position.y = (postTop * 0.5) * postScaleY;
+          return;
+        }
+        if (/^Node_/.test(obj.name)) {
+          obj.position.y *= postScaleY;
+          return;
+        }
+        obj.position.y += headLift;
+      });
       // The arm reaches local +X. Turn it toward the canal.
       model.rotation.y = spec.side > 0 ? Math.PI : 0;
       const px = spec.x != null ? spec.x : spec.side * 6.35;
@@ -235,7 +266,7 @@ export function createWorld(scene) {
       parent.add(model);
       const head = new THREE.Vector3(
         px - spec.side * 0.72 * s,
-        1.72 * s,
+        (1.72 + headLift) * s,
         index * CHUNK + spec.z,
       );
       lanterns.push({
