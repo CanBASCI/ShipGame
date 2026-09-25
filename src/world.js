@@ -90,25 +90,22 @@ export function createWorld(scene) {
       if (fromQueue && !parent.parent) return;
       const color = blossomHex(side, rng, index, false);
       const tree = sakuraTemplate.clone(true);
-      const scale = side < 0 ? 2.25 + rng() * 1.55 : 1.95 + rng() * 1.25;
+      // The downloaded tree is already about 4.7m tall with roots at y=0.
+      const scale = side < 0 ? 1.05 + rng() * 0.7 : 0.85 + rng() * 0.5;
       tree.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
-        const bloom = obj.material.name === 'Blossom';
-        if (!bloom) return;
+        // Blossom clusters ship with the file as role "secondary".
+        if (obj.userData.role !== 'secondary') return;
         const mat = obj.material.clone();
         mat.color.copy(color);
-        if (mat.map) mat.emissiveMap = mat.map;
         mat.emissive.copy(color);
-        mat.emissiveIntensity = 0.42;
-        mat.roughness = 0.58;
-        mat.metalness = 0;
+        mat.emissiveIntensity = 0.35;
         mat.userData.dispose = true;
         obj.material = mat;
       });
       tree.position.set(x, 0, z);
-      // Local -X is the canopy. Yaw aims that over the canal, then a small
-      // local tilt leans the trunk toward the water. Left and right use
-      // different yaw and lean ranges so the banks are not mirrors.
+      // The file's trunk is already on Y. Yaw and a small local tilt aim
+      // some trunks over the canal. Left and right ranges stay different.
       const yawSpan = side < 0 ? 1.2 : 0.72;
       const yaw = (side > 0 ? 0 : Math.PI) + (rng() - 0.5) * yawSpan;
       tree.rotation.set(0, yaw, 0);
@@ -119,7 +116,7 @@ export function createWorld(scene) {
       parent.add(tree);
       masses.push({
         chunk: index,
-        pos: new THREE.Vector3(x - side * scale * 1.25, scale * 1.45, index * CHUNK + z),
+        pos: new THREE.Vector3(x - side * scale * 0.9, scale * 3.4, index * CHUNK + z),
         base: color.clone(),
         gain: 0.85,
         tight: 0.42,

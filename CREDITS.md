@@ -12,22 +12,11 @@ These files are stored in the repo and loaded by the scene.
 
 ## Sakura tree
 
+- Author: bunpav
+- License: CC0 1.0
+- Source: https://bunpav.com/free-game-assets/low-poly-japanese-sakura-tree-3d-model
 - File: `public/assets/trees/sakura.glb`
-- Use: every bank tree. Branches lean over the canal. Blossom materials are tinted magenta, purple, and cyan on the left bank and fuchsia and amber on the right. The petal photograph stays on the mesh, so the tint follows the flower instead of a flat card.
-
-### Sakura bark
-
-- Author: Charlotte Baglioni
-- License: CC0
-- Source: https://polyhaven.com/a/sakura_bark
-- Use: trunk and branch color, normal, and roughness inside `sakura.glb`
-
-### Cherry blossom petals
-
-- Author: 玄史生
-- License: CC0
-- Source: https://commons.wikimedia.org/wiki/File:Cherry_Blossom_Twig_Close_up_in_Lane_74,_Sanmin_Road,_Taipei_20150226.jpg
-- Use: petal color and alpha on the hanging flowers inside `sakura.glb`. The photo is cropped onto curved petal meshes.
+- Use: every bank tree. Trunk, branches, and blossom clusters are the materials shipped in this file. Blossom clusters are tinted magenta, purple, and cyan on the left bank and fuchsia and amber on the right. Roots sit on the bank at y=0.
 
 ## Canal water ripples
 
