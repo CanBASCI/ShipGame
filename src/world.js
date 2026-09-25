@@ -61,31 +61,10 @@ export function createWorld(scene) {
           const bark = /bark/i.test(obj.material.name);
           const mat = obj.material.clone();
           mat.name = obj.material.name;
-          mat.metalness = 0;
-          if (bark) {
-            mat.color.set(0xffffff);
-            mat.emissive.set(0xfff0dd);
-            mat.emissiveMap = mat.map;
-            mat.emissiveIntensity = 0.7;
-            mat.roughness = 0.88;
-          } else {
-            // Black albedo so canal lights cannot paint the crown a flat hue.
-            // The blossom photo is the emissive map and stays visible at night.
-            mat.color.set(0x000000);
-            mat.emissiveMap = mat.map;
-            mat.emissive.set(0xffffff);
-            mat.emissiveIntensity = 1.15;
-            mat.alphaTest = 0.4;
-            mat.transparent = false;
-            mat.depthWrite = true;
-            mat.side = THREE.DoubleSide;
-            mat.roughness = 1;
-            if (mat.map) {
-              mat.map.anisotropy = 8;
-              mat.map.colorSpace = THREE.SRGBColorSpace;
-            }
-          }
-          mat.userData.bark = bark;
+          // The photo stays the surface color, so lanterns and daylight shade it.
+          // A small emissive lift keeps the photo readable at night without
+          // painting the crown a flat color or leaving it glowing all day.
+          tuneTreeMaterial(mat, bark);
           obj.material = mat;
         });
       }
@@ -108,6 +87,41 @@ export function createWorld(scene) {
   );
   const tmp = new THREE.Color();
   const warm = new THREE.Color(0xffb36a);
+
+  function tuneTreeMaterial(mat, bark) {
+    mat.metalness = 0;
+    mat.color.set(0xffffff);
+    mat.emissive.set(0xffffff);
+    mat.emissiveMap = mat.map;
+    mat.emissiveIntensity = 1;
+    mat.userData.bark = bark;
+    if (bark) {
+      mat.roughness = 0.88;
+    } else {
+      mat.alphaTest = 0.4;
+      mat.transparent = false;
+      mat.depthWrite = true;
+      mat.side = THREE.DoubleSide;
+      mat.roughness = 0.82;
+      if (mat.map) {
+        mat.map.anisotropy = 8;
+        mat.map.colorSpace = THREE.SRGBColorSpace;
+      }
+    }
+    const nightLift = bark ? 0.1 : 0.2;
+    const dayLift = bark ? 0.02 : 0.04;
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uDay = dayUniform;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uDay;')
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+           totalEmissiveRadiance *= mix(${nightLift}, ${dayLift}, uDay);`,
+        );
+    };
+    mat.needsUpdate = true;
+  }
 
   function blossomHex(side, rng, index, hot) {
     const shift = index * 0.045 + (rng() - 0.5) * 0.04;
@@ -145,19 +159,10 @@ export function createWorld(scene) {
       const tree = variant.clone(true);
       // Each variant is already about 5.4m with its roots at y=0.
       const scale = (side < 0 ? 0.78 + rng() * 0.36 : 0.62 + rng() * 0.28) * treeGrowth(index, side, x, z);
-      // A slight cool shift on the left bank and a slight warm shift on the right.
-      // Both stay near white so the petal and leaf photo is what you see.
-      const warmth = side < 0 ? 0xf3f6ff : 0xfff4ea;
       tree.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
         const mat = obj.material.clone();
         mat.userData.dispose = true;
-        if (!mat.userData.bark) {
-          mat.color.set(0x000000);
-          mat.emissive.set(warmth);
-          mat.emissiveMap = mat.map;
-          mat.emissiveIntensity = 1.15;
-        }
         obj.material = mat;
       });
       tree.position.set(x, 0, z);
