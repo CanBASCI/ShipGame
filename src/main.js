@@ -177,7 +177,6 @@ function update(dt) {
   if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
   world.update(boat.group.position, time, day, boat.state.yaw);
-  bats.update(boat.group.position, time, boat.state.yaw, tune);
   boat.headlight.getWorldPosition(headPos);
   boat.headlight.target.getWorldPosition(headAim);
   headAim.sub(headPos);
@@ -248,6 +247,7 @@ function update(dt) {
   renderer.toneMappingExposure = 0.74 + day * 0.2;
 
   updateCamera(dt, false);
+  bats.update(camera, time, tune);
 }
 
 updateCamera(0, true);
