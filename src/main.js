@@ -6,8 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createWater, setWaterLights } from './water.js';
 import { createBoat } from './boat.js';
 import { createWorld } from './world.js';
-
-const CYCLE = 180;
+import { createBats } from './bats.js';
 
 const canvas = document.getElementById('c');
 const hint = document.getElementById('hint');
@@ -69,6 +68,7 @@ scene.add(moonlight);
 scene.add(moonlight.target);
 
 const world = createWorld(scene);
+const bats = createBats(scene);
 const water = createWater();
 scene.add(water.mesh);
 const boat = createBoat();
@@ -96,13 +96,12 @@ function hideHint() {
   hint.classList.add('hide');
 }
 
-let dayHold = null;
-const tune = { fog: true, bamboo: 0.3, water: 0.5, tree: 1.2, fener: 0.5, spread: 0.3 };
+let dayHold = 0;
+const tune = { fog: true, bamboo: 0.3, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3 };
 world.setTune(tune);
 
 function dayAmount() {
-  if (dayHold != null) return dayHold;
-  return 0.5 - 0.5 * Math.cos((time / CYCLE) * Math.PI * 2);
+  return dayHold;
 }
 
 function inputState(day) {
@@ -178,6 +177,7 @@ function update(dt) {
   if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
   world.update(boat.group.position, time, day, boat.state.yaw);
+  bats.update(boat.group.position, time, boat.state.yaw);
   boat.headlight.getWorldPosition(headPos);
   boat.headlight.target.getWorldPosition(headAim);
   headAim.sub(headPos);
@@ -266,7 +266,6 @@ function frame(now) {
   }
   frames += 1;
   if (frames > 8) window.__ship.ready = true;
-  if (dayHold == null) daySlider.value = String(dayAmount());
   paintTune();
   requestAnimationFrame(frame);
 }

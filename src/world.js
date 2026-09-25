@@ -87,7 +87,7 @@ export function createWorld(scene) {
   const warm = new THREE.Color(0xffb36a);
   const bambooGlow = { value: 0.3 };
   const bambooReflect = { value: 0.5 };
-  const treeLight = { value: 1.2 };
+  const treeLight = { value: 1.5 };
 
   function applyTreeLight(mat) {
     mat.onBeforeCompile = (shader) => {

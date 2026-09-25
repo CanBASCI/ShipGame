@@ -79,6 +79,14 @@ These files are stored in the repo and loaded by the scene.
 - Files: `public/assets/fog/mist-a.png`, `public/assets/fog/mist-b.png`, `public/assets/fog/mist-c.png`
 - Use: the night distance mist. These are `FX_CloudAlpha02`, `FX_CloudAlpha04`, and `FX_CloudAlpha07` from WickedInsignia's "Clouds with Transparency", resized to 1024. Wide overlapping cards sit in the world across the canal and both banks. The mist stays clear by the boat, fades in farther ahead, and keeps going down the canal. Moonlight and the bow lantern are what show it.
 
+## Bat
+
+- Author: MoikMellah
+- License: CC0
+- Source: https://opengameart.org/content/bat-32x32
+- File: `public/assets/bats/bat.png`
+- Use: the bats in the distance mist. This is the gray flight cycle from MoikMellah's 32×32 bat, five wing frames kept and the magenta backdrop removed. A few at a time cross or follow the canal inside the fog ahead of the boat, then leave. They are not on the camera, the boat, or the water.
+
 ## Bamboo lantern
 
 - File: `public/assets/lantern/bamboo_lantern.glb`
