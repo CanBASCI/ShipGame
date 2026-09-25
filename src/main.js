@@ -6,7 +6,6 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createWater, setWaterLights } from './water.js';
 import { createBoat } from './boat.js';
 import { createWorld } from './world.js';
-import { createBats } from './bats.js';
 
 const canvas = document.getElementById('c');
 const hint = document.getElementById('hint');
@@ -68,7 +67,6 @@ scene.add(moonlight);
 scene.add(moonlight.target);
 
 const world = createWorld(scene);
-const bats = createBats(scene);
 const water = createWater();
 scene.add(water.mesh);
 const boat = createBoat();
@@ -97,7 +95,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, flight: 9, gap: 26 };
+const tune = { fog: true, bamboo: 0.3, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3 };
 world.setTune(tune);
 
 function dayAmount() {
@@ -247,7 +245,6 @@ function update(dt) {
   renderer.toneMappingExposure = 0.74 + day * 0.2;
 
   updateCamera(dt, false);
-  bats.update(camera, time, tune);
 }
 
 updateCamera(0, true);
@@ -308,8 +305,7 @@ document.getElementById('tune').addEventListener('click', (event) => {
   if (!button) return;
   const key = button.dataset.tune;
   const next = tune[key] * (Number(button.dataset.dir) > 0 ? TUNE_STEP : 1 / TUNE_STEP);
-  const seconds = key === 'flight' || key === 'gap';
-  tune[key] = seconds ? Math.min(180, Math.max(1, next)) : Math.min(4, Math.max(0.25, next));
+  tune[key] = Math.min(4, Math.max(0.25, next));
   applyTune();
 });
 
