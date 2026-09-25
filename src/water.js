@@ -10,12 +10,10 @@ const MAX_LIGHTS = 40;
 const vertexShader = /* glsl */ `
   varying vec3 vWorld;
   varying vec3 vNormal;
-  varying float vSwell;
   void main() {
     vec4 world = modelMatrix * vec4(position, 1.0);
     vWorld = world.xyz;
     vNormal = normalize(mat3(modelMatrix) * normal);
-    vSwell = position.y;
     gl_Position = projectionMatrix * viewMatrix * world;
   }
 `;
@@ -35,11 +33,9 @@ const fragmentShader = /* glsl */ `
   uniform float uTight[${MAX_LIGHTS}];
   uniform float uPatch[${MAX_LIGHTS}];
   uniform sampler2D uNormal;
-  uniform sampler2D uRough;
 
   varying vec3 vWorld;
   varying vec3 vNormal;
-  varying float vSwell;
 
   float waveH(vec2 p) {
     float h = 0.0;
@@ -67,17 +63,17 @@ const fragmentShader = /* glsl */ `
     // OpenGL normal on the XZ plane: tangent +X, bitangent along -Z.
     vec3 rip = vec3(tn.x, tn.z, -tn.y);
     n = normalize(n + vec3(rip.x, 0.0, rip.z) * 0.35);
-    float rough = texture(uRough, uvA).r;
 
-    vec3 deep = mix(vec3(0.0012, 0.0008, 0.0022), vec3(0.03, 0.027, 0.03), uDay);
-    float fres = pow(1.0 - clamp(dot(n, viewDir), 0.0, 1.0), 6.0);
-    vec3 color = deep + vec3(0.008, 0.007, 0.012) * fres * (1.0 - uDay * 0.4);
-    float sheen = pow(clamp(dot(n, viewDir), 0.0, 1.0), mix(70.0, 28.0, rough));
-    color += vec3(0.012, 0.01, 0.014) * sheen;
-    // Crests of the sea mesh catch the moon. Troughs stay dark, so the
-    // rolls read without turning the canal into a lamp.
-    float crest = smoothstep(-0.15, -0.012, vSwell);
-    color += vec3(0.22, 0.17, 0.10) * crest * (1.0 - uDay);
+    // Plane material on sea_part/scene.gltf. Night water is that dark blue-black.
+    vec3 seaBase = vec3(0.00735463, 0.00553134, 0.01596361);
+    float seaMetal = 0.58063112;
+    float seaRough = 0.06870444;
+    vec3 deep = mix(seaBase, vec3(0.03, 0.027, 0.03), uDay);
+    vec3 color = deep;
+    vec3 f0 = mix(vec3(0.04), seaBase, seaMetal);
+    float ndv = clamp(dot(n, viewDir), 0.0, 1.0);
+    float fres = pow(1.0 - ndv, mix(6.0, 64.0, 1.0 - seaRough));
+    color += f0 * fres;
 
     vec3 refl = vec3(0.0);
     vec2 camXZ = cameraPosition.xz;
@@ -168,12 +164,6 @@ export function createWater() {
   flatNormal.colorSpace = THREE.NoColorSpace;
   flatNormal.wrapS = THREE.RepeatWrapping;
   flatNormal.wrapT = THREE.RepeatWrapping;
-  const flatRough = new THREE.DataTexture(new Uint8Array([180, 180, 180, 255]), 1, 1);
-  flatRough.needsUpdate = true;
-  flatRough.colorSpace = THREE.NoColorSpace;
-  flatRough.wrapS = THREE.RepeatWrapping;
-  flatRough.wrapT = THREE.RepeatWrapping;
-
   const uniforms = {
     uTime: { value: 0 },
     uDay: { value: 0 },
@@ -189,7 +179,6 @@ export function createWater() {
     uTight: { value: new Float32Array(MAX_LIGHTS) },
     uPatch: { value: new Float32Array(MAX_LIGHTS) },
     uNormal: { value: flatNormal },
-    uRough: { value: flatRough },
   };
 
   const loader = new THREE.TextureLoader();
@@ -203,7 +192,6 @@ export function createWater() {
     uniform.value = fallback;
   };
   bindMap('/assets/water/Foam001_NormalGL.jpg', uniforms.uNormal, flatNormal);
-  bindMap('/assets/water/Foam001_Roughness.jpg', uniforms.uRough, flatRough);
 
   const material = new THREE.ShaderMaterial({
     uniforms,
