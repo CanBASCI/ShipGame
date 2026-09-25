@@ -61,7 +61,7 @@ const puffFragment = /* glsl */ `
   uniform sampler2D uAlpha;
   uniform sampler2D uDiff;
   void main() {
-    float mask = texture(uAlpha, vUv).r;
+    float mask = 1.0 - texture(uAlpha, vUv).r;
     if (mask < 0.22) discard;
     float petal = smoothstep(0.22, 0.9, mask);
     float core = pow(petal, 2.4);
@@ -106,7 +106,6 @@ function bezier(a, b, c, t, target) {
 
 export function createWorld(scene) {
   const puffGeoBase = new THREE.PlaneGeometry(1, 1);
-  const sphereGeo = new THREE.SphereGeometry(1, 6, 5);
   const dayUniform = { value: 0 };
   const fogColor = new THREE.Color(0x0c0612);
   const fogDensity = { value: 0.034 };
@@ -140,26 +139,6 @@ export function createWorld(scene) {
     transparent: true,
     depthWrite: false,
   });
-
-  const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  sphereMat.userData.shader = null;
-    sphereMat.onBeforeCompile = (shader) => {
-    shader.uniforms.uDay = dayUniform;
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <common>',
-      `#include <common>
-       uniform float uDay;`,
-    );
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <color_fragment>',
-      `#include <color_fragment>
-       vec3 warm = vec3(1.0, 0.62, 0.42);
-       diffuseColor.rgb = mix(diffuseColor.rgb, mix(diffuseColor.rgb, warm, 0.55), uDay * 0.75);
-       diffuseColor.rgb *= mix(1.15, 0.82, uDay);
-      `,
-    );
-    sphereMat.userData.shader = shader;
-  };
 
   const trunkMat = new THREE.MeshBasicMaterial({ color: 0x040208 });
   const quayMat = new THREE.MeshStandardMaterial({ color: 0x141216, roughness: 0.96, metalness: 0 });
@@ -552,7 +531,8 @@ export function createWorld(scene) {
 
     const puffMesh = makeInstances(puffGeoBase, puffMat, puffs, true);
     puffMesh.renderOrder = 2;
-    const sphereMesh = makeInstances(sphereGeo, sphereMat, spheres, false);
+    const sphereMesh = makeInstances(puffGeoBase, puffMat, spheres, true);
+    sphereMesh.renderOrder = 2;
     root.add(puffMesh, sphereMesh);
 
     for (const spec of lanternPlan(index, rng)) addLantern(root, index, spec);
