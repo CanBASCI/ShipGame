@@ -76,9 +76,13 @@ const BOW_LAMP = new THREE.Vector3(0, LAMP_FOOT_Y + 0.0955 * LAMP_SCALE, 1.72);
 
 function makeLantern() {
   const g = new THREE.Group();
-  const light = new THREE.PointLight(0xffb45a, 10.125, 12, 2);
+  // A flashlight cone: thin at the lamp, wider farther ahead. Intensity,
+  // reach, and decay stay the same as the old point light.
+  const light = new THREE.SpotLight(0xffb45a, 10.125, 12, 0.45, 0.6, 2);
   light.position.copy(BOW_LAMP);
+  light.target.position.set(BOW_LAMP.x, 0.05, BOW_LAMP.z + 9);
   g.add(light);
+  g.add(light.target);
   return { group: g, glowMats: [], light, localPos: BOW_LAMP.clone() };
 }
 
