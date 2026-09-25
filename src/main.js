@@ -97,7 +97,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3 };
+const tune = { fog: true, bamboo: 0.3, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, flight: 9, gap: 26 };
 world.setTune(tune);
 
 function dayAmount() {
@@ -177,7 +177,7 @@ function update(dt) {
   if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
   world.update(boat.group.position, time, day, boat.state.yaw);
-  bats.update(boat.group.position, time, boat.state.yaw);
+  bats.update(boat.group.position, time, boat.state.yaw, tune);
   boat.headlight.getWorldPosition(headPos);
   boat.headlight.target.getWorldPosition(headAim);
   headAim.sub(headPos);
@@ -308,7 +308,8 @@ document.getElementById('tune').addEventListener('click', (event) => {
   if (!button) return;
   const key = button.dataset.tune;
   const next = tune[key] * (Number(button.dataset.dir) > 0 ? TUNE_STEP : 1 / TUNE_STEP);
-  tune[key] = Math.min(4, Math.max(0.25, next));
+  const seconds = key === 'flight' || key === 'gap';
+  tune[key] = seconds ? Math.min(180, Math.max(1, next)) : Math.min(4, Math.max(0.25, next));
   applyTune();
 });
 

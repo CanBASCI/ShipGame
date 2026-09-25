@@ -34,7 +34,6 @@ export function createBats(scene) {
       map,
       active: false,
       t0: 0,
-      dur: 1,
       side0: 0,
       side1: 0,
       along0: 0,
@@ -66,12 +65,10 @@ export function createBats(scene) {
     const origin = new THREE.Vector3(boatPos.x + fx * ahead, 0, boatPos.z + fz * ahead);
     const cross = Math.random() < 0.6;
     const dir = Math.random() < 0.5 ? 1 : -1;
-    const duration = 8 + Math.random() * 3;
     for (let i = 0; i < count; i++) {
       const slot = free[i];
       slot.active = true;
       slot.t0 = time + i * 0.55;
-      slot.dur = duration;
       slot.yaw = yaw;
       slot.origin.copy(origin);
       const y = 5.2 + Math.random() * 2.4;
@@ -92,14 +89,18 @@ export function createBats(scene) {
     }
   }
 
-  function update(boatPos, time, yaw) {
+  function update(boatPos, time, yaw, tune) {
+    const flight = Math.max(1, tune.flight);
+    const gap = Math.max(1, tune.gap);
     if (time >= nextAt) {
+      const before = slots.filter((slot) => slot.active).length;
       spawn(time, boatPos, yaw);
-      nextAt = time + 20 + Math.random() * 12;
+      const after = slots.filter((slot) => slot.active).length;
+      if (after > before) nextAt = time + gap;
     }
     for (const slot of slots) {
       if (!slot.active) continue;
-      const u = (time - slot.t0) / slot.dur;
+      const u = (time - slot.t0) / flight;
       if (u < 0 || u >= 1) {
         if (u >= 1) slot.active = false;
         slot.sprite.visible = false;
