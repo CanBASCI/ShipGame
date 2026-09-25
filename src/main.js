@@ -279,6 +279,7 @@ window.addEventListener('error', (event) => {
 
 const TUNE_STEP = 1.1;
 const fogToggle = document.getElementById('fog-toggle');
+const boatSwitch = document.getElementById('boat-switch');
 const daySlider = document.getElementById('day-slider');
 const dayVal = document.getElementById('day-val');
 
@@ -293,6 +294,15 @@ function applyTune() {
   world.setTune(tune);
   paintTune();
 }
+
+boatSwitch.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-boat]');
+  if (!button) return;
+  boat.setHull(button.dataset.boat);
+  for (const el of boatSwitch.querySelectorAll('button')) {
+    el.setAttribute('aria-pressed', String(el === button));
+  }
+});
 
 fogToggle.addEventListener('click', () => {
   tune.fog = !tune.fog;

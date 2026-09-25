@@ -61,6 +61,25 @@ html, body {
   cursor: pointer;
 }
 
+.boat-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.boat-switch button {
+  padding: 4px 6px;
+}
+
+.boat-switch button[aria-pressed="true"] {
+  background: rgba(226, 214, 204, 0.16);
+  border-color: rgba(226, 214, 204, 0.72);
+}
+
+.boat-switch button[aria-pressed="false"] {
+  opacity: 0.5;
+}
+
 #fog-toggle {
   padding: 4px 8px;
 }

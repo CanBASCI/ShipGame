@@ -16,7 +16,16 @@ These files are stored in the repo and loaded by the scene.
 - License: CC0
 - Source: https://opengameart.org/content/simple-wood-boat
 - File: `public/assets/boat/rowboat.glb`
-- Use: the player's wooden rowboat. Hull and seat come from mikeask's `woodBoat.blend` (body + division), scaled to about 3.6m with the bow pointing down the canal. The single paddle mesh was split into a left oar and a right oar, each pivoted at the gunwale. Box UVs were added so the weathered-planks texture reads on the wood. The dark rower and the warm hanging lamp are not part of that file.
+- Use: the player's wooden rowboat. Hull and seat come from mikeask's `woodBoat.blend` (body + division), scaled to about 3.6m with the bow pointing down the canal. The single paddle mesh was split into a left oar and a right oar, each pivoted at the gunwale. Box UVs were added so the weathered-planks texture reads on the wood. The dark rower and the warm hanging lamp are not part of that file. It stays available as Mevcut on the tune panel.
+
+## Old Boat
+
+- Author: donnichols (https://sketchfab.com/donnichols)
+- License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+- Source: https://sketchfab.com/3d-models/old-boat-a9ce4ca0cac14f448c72bb94ad193437
+- Files: `public/assets/boat/donnichols/scene.gltf`, `public/assets/boat/donnichols/scene.bin`, `public/assets/boat/donnichols/textures/Main_baseColor.jpeg`, `public/assets/boat/donnichols/textures/Main_metallicRoughness.png`, `public/assets/boat/donnichols/textures/Main_normal.jpeg`
+- Use: the boat the game opens on (Donnichols on the tune panel). The hull and its two oars are that model, scaled to the same length as the mikeask boat with the beam narrowed so it sits on the canal the same way. The bow lantern is not part of that file.
+- This work is based on "Old Boat" (https://sketchfab.com/3d-models/old-boat-a9ce4ca0cac14f448c72bb94ad193437) by donnichols (https://sketchfab.com/donnichols) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
 
 ## Sakura tree
 

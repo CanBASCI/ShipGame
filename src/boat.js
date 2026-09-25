@@ -102,6 +102,9 @@ export function createBoat() {
   const body = new THREE.Group();
   body.position.z = FRAME_AHEAD;
   group.add(body);
+  const mevcutHull = new THREE.Group();
+  mevcutHull.visible = false;
+  body.add(mevcutHull);
 
   // Locks sit on the gunwale of the loaded hull. Blades are markers for splash height.
   const oarL = makeOarPivot(
@@ -112,6 +115,8 @@ export function createBoat() {
     new THREE.Vector3(0.812 * BEAM_NARROW, 0.475, 0.057),
     new THREE.Vector3(1.144, -0.372, -0.14),
   );
+  oarL.visible = false;
+  oarR.visible = false;
   body.add(oarL, oarR);
 
   const lantern = makeLantern();
@@ -136,6 +141,8 @@ export function createBoat() {
       obj.material.emissiveIntensity = 1.35;
       lantern.glowMats.push(obj.material);
     });
+    lampModel = model;
+    placeLantern();
     lantern.group.add(model);
   });
 
@@ -149,11 +156,99 @@ export function createBoat() {
     const rightOar = gltf.scene.getObjectByName('OarR');
     if (hull) {
       hull.scale.set(BEAM_NARROW, 1, 1);
-      body.add(hull);
+      mevcutHull.add(hull);
     }
     if (leftOar) oarL.add(leftOar);
     if (rightOar) oarR.add(rightOar);
   });
+
+  // Donnichols hull: same 3.6m length as the mikeask boat, beam narrowed to the
+  // same width, keel on the same waterline, bow toward +Z.
+  const DONN_LENGTH = 304.771 - (-298.787);
+  const DONN_SCALE = 3.6 / DONN_LENGTH;
+  const DONN_BEAM = (0.826356053352356 * BEAM_NARROW) / 117.945;
+  const DONN_KEEL = 0.04;
+  const DONN_CENTER_Z = 2.992;
+  const donnRoot = new THREE.Group();
+  donnRoot.scale.set(DONN_BEAM, DONN_SCALE, DONN_SCALE);
+  donnRoot.position.set(0, -DONN_KEEL * DONN_SCALE - 0.12, -DONN_CENTER_Z * DONN_SCALE);
+  body.add(donnRoot);
+  const donnOarL = makeOarPivot(new THREE.Vector3(-0.568, 0.55, 0.161), new THREE.Vector3(-1.7, 0, 0));
+  const donnOarR = makeOarPivot(new THREE.Vector3(0.568, 0.55, 0.161), new THREE.Vector3(1.7, 0, 0));
+  body.add(donnOarL, donnOarR);
+
+  let hullName = 'donnichols';
+  let lampModel = null;
+  const lampFeet = {
+    mevcut: new THREE.Vector3(0, LAMP_FOOT_Y, 1.72),
+    donnichols: new THREE.Vector3(0, 0.63, 1.7),
+  };
+
+  function placeLantern() {
+    const foot = lampFeet[hullName];
+    const lift = 0.0955 * LAMP_SCALE;
+    lantern.localPos.set(foot.x, foot.y + lift, foot.z);
+    lantern.light.position.copy(lantern.localPos);
+    if (lampModel) lampModel.position.set(foot.x, foot.y, foot.z);
+  }
+
+  function mountDonnOar(oarNode, pivot, side) {
+    let src = null;
+    oarNode.traverse((obj) => {
+      if (obj.isMesh) src = obj;
+    });
+    if (!src) return false;
+    oarNode.visible = false;
+    src.updateWorldMatrix(true, false);
+    const toBody = new THREE.Matrix4().copy(body.matrixWorld).invert().multiply(src.matrixWorld);
+    const geo = src.geometry.clone();
+    geo.applyMatrix4(toBody);
+    const handle = new THREE.Vector3(0, -0.629308819770813, 0).applyMatrix4(toBody);
+    const tip = new THREE.Vector3(0, 3.308061361312866, 0).applyMatrix4(toBody);
+    const widePt = new THREE.Vector3(0.16, 2.9, 0).applyMatrix4(toBody);
+    const lock = handle.clone().lerp(tip, 0.26);
+    geo.translate(-lock.x, -lock.y, -lock.z);
+    const shaft = tip.clone().sub(lock).normalize();
+    const out = new THREE.Vector3(side === 'left' ? -1 : 1, 0, 0);
+    const align = new THREE.Quaternion().setFromUnitVectors(shaft, out);
+    geo.applyQuaternion(align);
+    const wide = widePt.sub(lock).applyQuaternion(align);
+    const roll = new THREE.Quaternion().setFromAxisAngle(
+      out,
+      -Math.atan2(wide.dot(new THREE.Vector3(0, 1, 0)), wide.dot(new THREE.Vector3(0, 0, 1))),
+    );
+    geo.applyQuaternion(roll);
+    const bladeTip = tip.clone().sub(lock).applyQuaternion(align).applyQuaternion(roll);
+    pivot.userData.blade.position.copy(bladeTip);
+    const oarMesh = new THREE.Mesh(geo, src.material);
+    pivot.add(oarMesh);
+    return true;
+  }
+
+  new GLTFLoader().load('/assets/boat/donnichols/scene.gltf', (gltf) => {
+    donnRoot.add(gltf.scene);
+    body.updateWorldMatrix(true, true);
+    const oar1 = gltf.scene.getObjectByName('Oar1');
+    const oar2 = gltf.scene.getObjectByName('Oar2');
+    const pivoted = oar1 && oar2 && mountDonnOar(oar1, donnOarL, 'left') && mountDonnOar(oar2, donnOarR, 'right');
+    if (!pivoted) {
+      if (oar1) oar1.visible = false;
+      if (oar2) oar2.visible = false;
+    }
+    donnRoot.visible = hullName === 'donnichols';
+  });
+
+  function setHull(name) {
+    hullName = name === 'donnichols' ? 'donnichols' : 'mevcut';
+    const donn = hullName === 'donnichols';
+    mevcutHull.visible = !donn;
+    oarL.visible = !donn;
+    oarR.visible = !donn;
+    donnRoot.visible = donn;
+    donnOarL.visible = donn;
+    donnOarR.visible = donn;
+    placeLantern();
+  }
 
   const state = {
     x: 0,
@@ -198,9 +293,10 @@ export function createBoat() {
         lift = 0.02;
       } else {
         const u = (p - 0.62) / 0.38;
-        // Draw back through the water, bow toward stern.
+        // Draw back through the water, bow toward stern. The extra angle
+        // puts the blade tip under the surface without lengthening the oar.
         sweep = THREE.MathUtils.lerp(-0.46, 0.34, u);
-        lift = Math.sin(u * Math.PI) * -0.28;
+        lift = Math.sin(u * Math.PI) * -0.42;
       }
     } else {
       sweep = Math.sin(time * 0.7 + sign) * 0.02;
@@ -316,6 +412,8 @@ export function createBoat() {
 
     poseOar(oarL, 'left', time);
     poseOar(oarR, 'right', time);
+    poseOar(donnOarL, 'left', time);
+    poseOar(donnOarR, 'right', time);
 
     const flicker = 1 + Math.sin(time * 2.3) * 0.03 + Math.sin(time * 5.1) * 0.015;
     lantern.light.intensity = (5.0625 - input.day * 2.25) * flicker;
@@ -359,20 +457,23 @@ export function createBoat() {
     tryStroke,
     update,
     reset,
+    setHull,
     lanternPosition,
     lanternColor: new THREE.Color(0xffb45a),
     headlight,
     blades() {
       group.updateWorldMatrix(true, true);
+      const leftPivot = hullName === 'donnichols' ? donnOarL : oarL;
+      const rightPivot = hullName === 'donnichols' ? donnOarR : oarR;
       const point = (pivot) => {
         pivot.userData.blade.getWorldPosition(bladeWorld);
         return bladeWorld.clone();
       };
       return {
-        left: bladeHeight(oarL),
-        right: bladeHeight(oarR),
-        leftPoint: point(oarL),
-        rightPoint: point(oarR),
+        left: bladeHeight(leftPivot),
+        right: bladeHeight(rightPivot),
+        leftPoint: point(leftPivot),
+        rightPoint: point(rightPivot),
         strokeLeft: strokeT.left,
         strokeRight: strokeT.right,
       };
