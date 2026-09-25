@@ -43,14 +43,6 @@ These files are stored in the repo and loaded by the scene.
 - Files: `public/assets/water/Foam001_NormalGL.jpg`, `Foam001_Roughness.jpg`
 - Use: fine ripple normal and roughness on the dark canal. Lantern and blossom reflections stay in the water shader. The foam color map is not used.
 
-## Wave ring
-
-- Author: Kenney
-- License: CC0
-- Source: https://www.kenney.nl/assets/particle-pack
-- File: `public/assets/water/wave-ring.png`
-- Use: one shared sprite for the oar rings and the bow wake. This is `circle_02.png` from Kenney's Particle Pack, a thin ring on a transparent background. `circle_05.png` in that pack is a filled disc, so the ring in the water is `circle_02`. The sprite is tinted the same warm water color for both, not painted white. The three oar rings keep their thicknesses: the second is 25% thinner than the first, and the third is 50% thinner. The bow wake stamps the same ring as several thin crests that open from the bow to both sides while the boat is moving, and fade when it stops.
-
 ## Bamboo veneer
 
 - Author: Jenelle van Heerden

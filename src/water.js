@@ -14,9 +14,6 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   uniform float uTime;
   uniform float uDay;
-  uniform vec3 uBoat;
-  uniform float uYaw;
-  uniform float uSpeed;
   uniform vec3 uFogColor;
   uniform float uFogDensity;
   uniform vec3 uHeadPos;
@@ -30,75 +27,8 @@ const fragmentShader = /* glsl */ `
   uniform float uPatch[${MAX_LIGHTS}];
   uniform sampler2D uNormal;
   uniform sampler2D uRough;
-  uniform sampler2D uWave;
-  uniform vec4 uSplash[16];
 
   varying vec3 vWorld;
-
-  // circle_02's bright stroke, as a radius in the sprite's 0–1 UV.
-  const float WAVE_RING = 0.277;
-
-  float stamp(vec2 uv) {
-    float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
-    return texture(uWave, clamp(uv, 0.0, 1.0)).a * inside;
-  }
-
-  // Several thin crests leave the stem, open to both sides, and fade astern.
-  float bowMask(vec2 p) {
-    float sy = sin(uYaw);
-    float cy = cos(uYaw);
-    vec2 d = p - uBoat.xz;
-    float lz = d.x * sy + d.y * cy;
-    float lx = d.x * cy - d.y * sy;
-    float back = 2.02 - lz;
-    float trail = clamp(back, 0.0, 12.0);
-    float gate = smoothstep(0.0, 0.2, back);
-    float speed = smoothstep(0.02, 0.4, uSpeed);
-    float bestBand = 1.0;
-    float bestGain = 0.0;
-    for (int k = 0; k < 4; k++) {
-      float fk = float(k);
-      float run = trail - fk * 0.22;
-      float alive = smoothstep(0.0, 0.12, run);
-      float open = 0.42 + fk * 0.30 + run * (0.20 + fk * 0.045);
-      float band = abs(abs(lx) - open);
-      float gain = alive * exp(-fk * 0.08) * exp(-max(run, 0.0) * 0.09);
-      if (band < bestBand) {
-        bestBand = band;
-        bestGain = gain;
-      }
-    }
-    // One stamp. The sprite stroke is about 0.055 UV wide, so the crest stays thin.
-    float show = step(bestBand, 0.12) * step(0.001, bestGain) * gate * speed;
-    float uvR = WAVE_RING + min(bestBand, 0.2) * (0.028 / 0.055);
-    return stamp(vec2(0.5 + uvR, 0.5)) * bestGain * show;
-  }
-
-  float splashMask(vec2 p) {
-    float bestGap = 1.0;
-    float fade = 0.0;
-    vec2 uv = vec2(0.0);
-    for (int i = 0; i < 16; i++) {
-      vec4 sp = uSplash[i];
-      if (sp.w < 0.5) continue;
-      float age = sp.z;
-      float radius = max(age * 0.55, 0.001);
-      // w is 24, 32, or 48. Ring 2 is 25% thinner, ring 3 is 50% thinner.
-      float thin = 24.0 / sp.w;
-      vec2 delta = p - sp.xy;
-      float dist = length(delta);
-      if (dist < 0.0001) continue;
-      float uvR = dist * (WAVE_RING / radius);
-      uvR = WAVE_RING + (uvR - WAVE_RING) / thin;
-      float gap = abs(uvR - WAVE_RING);
-      if (gap < bestGap) {
-        bestGap = gap;
-        fade = exp(-age * 0.85) * smoothstep(0.0, 0.04, age);
-        uv = vec2(0.5) + (delta / dist) * uvR;
-      }
-    }
-    return stamp(uv) * fade;
-  }
 
   float waveH(vec2 p) {
     float h = 0.0;
@@ -192,11 +122,6 @@ const fragmentShader = /* glsl */ `
     refl *= mix(1.0, 0.5, uDay);
     color += min(refl, vec3(4.5));
 
-    vec3 waveTint = vec3(0.22, 0.18, 0.15);
-    color += waveTint * splashMask(p) * 0.55;
-    color += waveTint * bowMask(p) * 0.55;
-    color += vec3(0.22, 0.18, 0.15) * bowMask(p) * 0.55;
-
     vec3 toHead = vWorld - uHeadPos;
     float headAhead = dot(toHead, uHeadDir);
     float headSide = length(toHead - uHeadDir * headAhead);
@@ -232,18 +157,10 @@ export function createWater() {
   flatRough.colorSpace = THREE.NoColorSpace;
   flatRough.wrapS = THREE.RepeatWrapping;
   flatRough.wrapT = THREE.RepeatWrapping;
-  const flatWave = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
-  flatWave.needsUpdate = true;
-  flatWave.colorSpace = THREE.NoColorSpace;
-  flatWave.wrapS = THREE.ClampToEdgeWrapping;
-  flatWave.wrapT = THREE.ClampToEdgeWrapping;
 
   const uniforms = {
     uTime: { value: 0 },
     uDay: { value: 0 },
-    uBoat: { value: new THREE.Vector3() },
-    uYaw: { value: 0 },
-    uSpeed: { value: 0 },
     uFogColor: { value: new THREE.Color(0x0c0612) },
     uFogDensity: { value: 0.034 },
     uHeadPos: { value: new THREE.Vector3() },
@@ -257,8 +174,6 @@ export function createWater() {
     uPatch: { value: new Float32Array(MAX_LIGHTS) },
     uNormal: { value: flatNormal },
     uRough: { value: flatRough },
-    uSplash: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 8, 0)) },
-    uWave: { value: flatWave },
   };
 
   const loader = new THREE.TextureLoader();
@@ -273,15 +188,6 @@ export function createWater() {
   };
   bindMap('/assets/water/Foam001_NormalGL.jpg', uniforms.uNormal, flatNormal);
   bindMap('/assets/water/Foam001_Roughness.jpg', uniforms.uRough, flatRough);
-  loader.load('/assets/water/wave-ring.png', (tex) => {
-    tex.colorSpace = THREE.NoColorSpace;
-    tex.wrapS = THREE.ClampToEdgeWrapping;
-    tex.wrapT = THREE.ClampToEdgeWrapping;
-    tex.magFilter = THREE.LinearFilter;
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.generateMipmaps = true;
-    uniforms.uWave.value = tex;
-  });
 
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -296,39 +202,6 @@ export function createWater() {
   mesh.renderOrder = 1;
 
   return { mesh, uniforms };
-}
-
-const splashSlots = Array.from({ length: 16 }, () => ({ x: 0, z: 0, birth: -20, sharp: 0 }));
-let splashNext = 0;
-const splashWet = { left: false, right: false };
-// Ring 1 keeps the current band. Ring 2 is 25% thinner, ring 3 is 50% thinner.
-const SPLASH_SHARP = [24, 24 / 0.75, 24 / 0.5];
-
-export function noteSplashes(uniforms, blades, time) {
-  const emitTrain = (point) => {
-    for (let k = 0; k < SPLASH_SHARP.length; k++) {
-      const slot = splashSlots[splashNext];
-      splashNext = (splashNext + 1) % splashSlots.length;
-      slot.x = point.x;
-      slot.z = point.z;
-      slot.birth = time + k * 0.14;
-      slot.sharp = SPLASH_SHARP[k];
-    }
-  };
-  const consider = (point, stroke, side) => {
-    const inWater = stroke >= 0 && point && point.y < 0;
-    if (inWater && !splashWet[side]) emitTrain(point);
-    splashWet[side] = inWater;
-  };
-  consider(blades.leftPoint, blades.strokeLeft, 'left');
-  consider(blades.rightPoint, blades.strokeRight, 'right');
-  const out = uniforms.uSplash.value;
-  for (let i = 0; i < splashSlots.length; i++) {
-    const slot = splashSlots[i];
-    const age = time - slot.birth;
-    const alive = age >= 0 && age < 2.2;
-    out[i].set(slot.x, slot.z, alive ? age : 8, alive ? slot.sharp : 0);
-  }
 }
 
 export function setWaterLights(uniforms, sources) {

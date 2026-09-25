@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { createWater, setWaterLights, noteSplashes } from './water.js';
+import { createWater, setWaterLights } from './water.js';
 import { createBoat } from './boat.js';
 import { createWorld } from './world.js';
 
@@ -200,10 +200,6 @@ function update(dt) {
   water.mesh.position.z = boat.state.z;
   water.uniforms.uTime.value = time;
   water.uniforms.uDay.value = day;
-  water.uniforms.uBoat.value.copy(boat.group.position);
-  water.uniforms.uYaw.value = boat.state.yaw;
-  water.uniforms.uSpeed.value = Math.abs(boat.state.speed);
-  noteSplashes(water.uniforms, boat.blades(), time);
   water.uniforms.uFogColor.value.copy(scene.fog.color);
   water.uniforms.uFogDensity.value = scene.fog.density;
 
