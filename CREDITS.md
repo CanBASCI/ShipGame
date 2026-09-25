@@ -71,6 +71,14 @@ These files are stored in the repo and loaded by the scene.
 - File: `public/assets/stars/star.png`
 - Use: the stars in the night sky. This is `star_07.png` from Kenney's Particle Pack, a soft white star with a transparent background. It is stamped into the sky so the night points stay soft stars, not square cells.
 
+## Distance mist
+
+- Author: Kenney
+- License: CC0
+- Source: https://www.kenney.nl/assets/particle-pack
+- File: `public/assets/fog/mist.png`
+- Use: the mist in the distance. This is `smoke_04.png` from Kenney's Particle Pack. It is tiled through the far canal, banks, and trees so the fog has wisps. The boat and the nearby lanterns stay in front of it. The night tint is the scene fog color.
+
 ## Bamboo lantern
 
 - File: `public/assets/lantern/bamboo_lantern.glb`

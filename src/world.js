@@ -412,6 +412,7 @@ export function createWorld(scene) {
       mesh.position.z = boatPos.z + 78;
     }
     mist.uniforms.uDay.value = day;
+    mist.uniforms.uTime.value = time;
     mist.uniforms.uFogDensity.value = fogDensity.value;
   }
 
@@ -519,9 +520,17 @@ function createSky() {
 }
 
 function createMist() {
+  const fogTex = new THREE.TextureLoader().load('/assets/fog/mist.png');
+  fogTex.colorSpace = THREE.NoColorSpace;
+  fogTex.wrapS = THREE.RepeatWrapping;
+  fogTex.wrapT = THREE.RepeatWrapping;
+  fogTex.magFilter = THREE.LinearFilter;
+  fogTex.minFilter = THREE.LinearMipmapLinearFilter;
   const uniforms = {
     uDay: { value: 0 },
-    uColor: { value: new THREE.Color(0x1a1024) },
+    uTime: { value: 0 },
+    uColor: { value: new THREE.Color(0x0c0612) },
+    uFog: { value: fogTex },
     uFogDensity: { value: 0.034 },
   };
   const material = new THREE.ShaderMaterial({
@@ -539,24 +548,31 @@ function createMist() {
     fragmentShader: /* glsl */ `
       varying vec3 vWorld;
       uniform float uDay;
+      uniform float uTime;
       uniform vec3 uColor;
+      uniform sampler2D uFog;
       void main() {
+        vec2 drift = vec2(uTime * 0.015, uTime * 0.008);
+        vec2 uvA = vWorld.xz * 0.042 + vec2(vWorld.y * 0.31, 0.0) + drift;
+        vec2 uvB = vWorld.xz * 0.019 + vec2(0.0, vWorld.y * 0.17) - drift * 0.6;
+        float wisp = texture2D(uFog, uvA).a;
+        float wispB = texture2D(uFog, uvB).a;
+        float mist = clamp(wisp * 0.85 + wispB * 0.55, 0.0, 1.0);
         float d = distance(vWorld.xz, cameraPosition.xz);
-        float dist = smoothstep(16.0, 88.0, d);
-        float low = smoothstep(1.6, 0.02, vWorld.y);
-        float a = dist * mix(0.18, 1.0, low) * 0.48 * (1.0 - uDay * 0.4);
-        vec3 col = mix(uColor, vec3(0.42, 0.34, 0.32), uDay);
+        float dist = smoothstep(18.0, 72.0, d);
+        float a = dist * mist * 0.55 * (1.0 - uDay * 0.65);
+        vec3 col = mix(uColor, vec3(0.55, 0.5, 0.48), uDay);
         gl_FragColor = vec4(col, a);
       }
     `,
   });
   const meshes = [];
-  for (const y of [0.08, 0.28, 0.55, 0.95, 1.55]) {
-    const geo = new THREE.PlaneGeometry(24, 150, 1, 1);
+  for (const y of [0.15, 0.7, 1.6, 3.1, 4.8, 6.4]) {
+    const geo = new THREE.PlaneGeometry(26, 150, 1, 1);
     geo.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(geo, material);
     mesh.position.y = y;
-    mesh.renderOrder = 4;
+    mesh.renderOrder = 2;
     mesh.frustumCulled = false;
     meshes.push(mesh);
   }

@@ -111,7 +111,16 @@ const fragmentShader = /* glsl */ `
         float soft = exp(-distL * distL * 2.2);
         refl += tint * soft * gain * 1.35;
       } else {
-        refl += tint * band * gate * shim * atten * 5.2;
+        // Bamboo lanterns use the moon's narrow streak: it starts on the
+        // lantern and thins as it runs back toward the boat. Not an arrowhead.
+        float headL = smoothstep(-1.4, 0.25, along);
+        float tL = clamp(along / 112.0, 0.0, 1.0);
+        // Same narrow beam the arrow used. The streak still starts on the
+        // lantern and thins toward the boat.
+        float kL = mix(6.0, 90.0, tight) * mix(1.0, 28.0 / 0.42, tL * tL);
+        float streakL = headL * exp(-tL * 2.1) * exp(-across * across * kL);
+        float rippleL = 0.84 + 0.16 * sin(along * 1.2 + uTime * 1.1 + float(i));
+        refl += tint * streakL * rippleL * atten * 5.2;
       }
     }
 

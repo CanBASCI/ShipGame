@@ -51,8 +51,9 @@ const fullMoon = new THREE.Sprite(new THREE.SpriteMaterial({
   map: fullMoonTex,
   transparent: true,
   depthWrite: false,
-  fog: true,
+  fog: false,
 }));
+fullMoon.renderOrder = 8;
 fullMoon.scale.set(3.075, 3.075, 1);
 fullMoon.position.set(0, MOON_HEIGHT, MOON_AHEAD);
 scene.add(fullMoon);
