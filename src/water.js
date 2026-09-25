@@ -99,16 +99,15 @@ const fragmentShader = /* glsl */ `
       float atten = gain / (1.0 + distL * distL * 0.0022);
       vec3 tint = uCol[i];
       if (uPatch[i] > 1.5) {
-        // Moon only. The light sits on the far edge of the water. along
-        // grows as the surface runs back toward the boat, and the band
-        // narrows along that run. Not the round boat-lamp patch.
-        float head = smoothstep(-1.4, 0.25, along);
-        float t = clamp(along / 112.0, 0.0, 1.0);
-        float k = mix(0.42, 28.0, t * t);
+        // Moon only. The head is under the moon. along grows back toward
+        // the boat, the path narrows, and the light fades. Not the canal banks.
+        float head = smoothstep(-1.2, 0.35, along);
+        float t = clamp(along / 34.0, 0.0, 1.0);
+        float k = mix(0.85, 7.5, t);
         float distCam = length(cameraPosition - vWorld);
         float fogT = exp(-uFogDensity * uFogDensity * distCam * distCam);
-        float remain = exp(-t * 2.1);
-        float lift = clamp(remain * 0.63 / max(fogT, 0.05), 0.0, 7.0);
+        float fade = exp(-t * 1.55);
+        float lift = clamp(fade * 0.72 / max(fogT, 0.22), 0.0, 2.6);
         float streak = head * exp(-across * across * k);
         float ripple = 0.84 + 0.16 * sin(along * 1.2 + uTime * 1.1);
         refl += tint * streak * ripple * gain * 1.05 * lift;

@@ -95,7 +95,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3 };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 1 };
 world.setTune(tune);
 
 function dayAmount() {
@@ -222,12 +222,12 @@ function update(dt) {
   moonlight.target.position.set(0, 1.2, boat.state.z);
   moonlight.intensity = 0.07 * night;
   if (night > 0.04) {
-    // Water plane is 240 long and centered on the boat, so +120 is the far edge.
-    moonStreak.set(0, 0, boat.state.z + 120);
+    // The bright end sits on the water under the moon. The shader fades it back toward the boat.
+    moonStreak.set(0, 0, boat.state.z + MOON_AHEAD);
     reflectionScratch.push({
       pos: moonStreak,
       color: moonReflect,
-      gain: 0.315 * night,
+      gain: 0.315 * night * tune.ay,
       tight: 0.35,
       streak: true,
     });
