@@ -56,8 +56,6 @@ fullMoon.scale.set(3.075, 3.075, 1);
 fullMoon.position.set(0, MOON_HEIGHT, MOON_AHEAD);
 scene.add(fullMoon);
 const moonColor = new THREE.Color(0xd5e0ff);
-// Median of Sivaln's moon photograph, so the streak matches the disc.
-const moonReflect = new THREE.Color(0xe5bc7b);
 const moonStreak = new THREE.Vector3();
 const headPos = new THREE.Vector3();
 const headAim = new THREE.Vector3();
@@ -226,8 +224,8 @@ function update(dt) {
     moonStreak.set(0, 0, boat.state.z + MOON_AHEAD);
     reflectionScratch.push({
       pos: moonStreak,
-      color: moonReflect,
-      gain: 0.315 * night * tune.ay,
+      color: moonColor,
+      gain: night * tune.ay,
       tight: 0.35,
       streak: true,
     });

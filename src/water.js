@@ -99,18 +99,20 @@ const fragmentShader = /* glsl */ `
       float atten = gain / (1.0 + distL * distL * 0.0022);
       vec3 tint = uCol[i];
       if (uPatch[i] > 1.5) {
-        // Moon only. The head is under the moon. along grows back toward
-        // the boat, the path narrows, and the light fades. Not the canal banks.
-        float head = smoothstep(-1.2, 0.35, along);
+        // Cool moonlight on the river. Wide enough that the water reads,
+        // brightest under the moon, gone by the boat. Not a gold ribbon.
+        float head = smoothstep(-20.0, 6.0, along);
         float t = clamp(along / 34.0, 0.0, 1.0);
-        float k = mix(0.85, 7.5, t);
+        // Wide across the river, then soft at the banks. Fades out before the boat.
+        float span = exp(-across * across * 0.02);
+        float fade = pow(clamp(1.0 - t, 0.0, 1.0), 1.15) * head;
+        vec3 moonDir = normalize(vec3(0.0, 0.29, 0.96));
+        float face = clamp(dot(geoN, moonDir), 0.0, 1.0);
+        float lit = fade * span * (0.7 + face);
         float distCam = length(cameraPosition - vWorld);
         float fogT = exp(-uFogDensity * uFogDensity * distCam * distCam);
-        float fade = exp(-t * 1.55);
-        float lift = clamp(fade * 0.72 / max(fogT, 0.22), 0.0, 2.6);
-        float streak = head * exp(-across * across * k);
-        float ripple = 0.84 + 0.16 * sin(along * 1.2 + uTime * 1.1);
-        refl += tint * streak * ripple * gain * 1.05 * lift;
+        float lift = clamp(0.9 / max(fogT, 0.32), 1.0, 2.4);
+        refl += tint * lit * gain * 0.40 * lift;
       } else if (uPatch[i] > 0.5) {
         float soft = exp(-distL * distL * 2.2);
         refl += tint * soft * gain * 1.35;
