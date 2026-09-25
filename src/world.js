@@ -69,14 +69,21 @@ export function createWorld(scene) {
             mat.emissiveIntensity = 0.7;
             mat.roughness = 0.88;
           } else {
+            // Black albedo so canal lights cannot paint the crown a flat hue.
+            // The blossom photo is the emissive map and stays visible at night.
+            mat.color.set(0x000000);
             mat.emissiveMap = mat.map;
             mat.emissive.set(0xffffff);
-            mat.emissiveIntensity = 0.48;
+            mat.emissiveIntensity = 1.15;
             mat.alphaTest = 0.4;
             mat.transparent = false;
             mat.depthWrite = true;
             mat.side = THREE.DoubleSide;
-            mat.roughness = 0.72;
+            mat.roughness = 1;
+            if (mat.map) {
+              mat.map.anisotropy = 8;
+              mat.map.colorSpace = THREE.SRGBColorSpace;
+            }
           }
           mat.userData.bark = bark;
           obj.material = mat;
@@ -121,20 +128,24 @@ export function createWorld(scene) {
   function addTree(parent, x, z, side, rng, index) {
     const place = (fromQueue) => {
       if (fromQueue && !parent.parent) return;
-      const color = blossomHex(side, rng, index, false);
+      // Keep consuming the old palette roll so bank spacing stays put.
+      blossomHex(side, rng, index, false);
       const variant = sakuraVariants[Math.floor(rng() * sakuraVariants.length)];
       const tree = variant.clone(true);
       // Each variant is already about 5.4m with its roots at y=0.
       const scale = side < 0 ? 0.78 + rng() * 0.36 : 0.62 + rng() * 0.28;
+      // A slight cool shift on the left bank and a slight warm shift on the right.
+      // Both stay near white so the petal and leaf photo is what you see.
+      const warmth = side < 0 ? 0xf3f6ff : 0xfff4ea;
       tree.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
         const mat = obj.material.clone();
         mat.userData.dispose = true;
         if (!mat.userData.bark) {
-          // Keep the petal photo. The bank hue only shifts it.
-          mat.color.set(0xffffff).lerp(color, 0.62);
-          mat.emissive.copy(color);
-          mat.emissiveIntensity = 0.62;
+          mat.color.set(0x000000);
+          mat.emissive.set(warmth);
+          mat.emissiveMap = mat.map;
+          mat.emissiveIntensity = 1.15;
         }
         obj.material = mat;
       });
@@ -147,12 +158,13 @@ export function createWorld(scene) {
       const lean = (side < 0 ? 0.05 : 0.08) + rng() * (side < 0 ? 0.1 : 0.14);
       tree.rotateZ(lean);
       tree.rotateX((rng() - 0.5) * (side < 0 ? 0.1 : 0.06));
-      tree.scale.setScalar(scale);
+      // The file stores the fit-to-5.4m scale on the tree root. Multiply it.
+      tree.scale.multiplyScalar(scale);
       parent.add(tree);
       masses.push({
         chunk: index,
         pos: new THREE.Vector3(x - side * scale * 1.1, scale * 4.4, index * CHUNK + z),
-        base: color.clone(),
+        base: new THREE.Color(side < 0 ? 0xf0c4d4 : 0xf3c8b4),
         gain: 0.85,
         tight: 0.42,
       });

@@ -16,7 +16,7 @@ These files are stored in the repo and loaded by the scene.
 - License: CC-BY 4.0
 - Source: https://sketchfab.com/3d-models/cherry-blossom-trees-f69be55d2e4f4f73b568ebb185bd8496
 - File: `public/assets/trees/sakura.glb`
-- Use: every bank tree. The file is Jagobo's "Cherry Blossom Trees" model: three trees with photographic bark and blossom textures. Each tree was scaled so the trunk is about 5.4m with roots at the origin, and the polygon count was reduced so the banks can hold a row of them. Blossom textures are shifted magenta, purple, and cyan on the left bank and fuchsia and amber on the right. This work is based on "Cherry Blossom Trees" (https://sketchfab.com/3d-models/cherry-blossom-trees-f69be55d2e4f4f73b568ebb185bd8496) by Jagobo (https://sketchfab.com/Jagobo) licensed under CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/).
+- Use: every bank tree. The file is Jagobo's "Cherry Blossom Trees" model: three trees with photographic bark and blossom textures. Each tree was scaled so the trunk is about 5.4m with roots at the origin. The foliage cards were kept whole so the blossom photo stays intact. In the night scene the crown is lit from that photo, with only a slight cool shift on the left bank and a slight warm shift on the right. This work is based on "Cherry Blossom Trees" (https://sketchfab.com/3d-models/cherry-blossom-trees-f69be55d2e4f4f73b568ebb185bd8496) by Jagobo (https://sketchfab.com/Jagobo) licensed under CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/).
 
 ## Canal water ripples
 
