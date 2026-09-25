@@ -361,8 +361,10 @@ export function createBoat() {
       const turnLeft = !!input.turnLeft;
       const turnRight = !!input.turnRight;
       let side = null;
-      if (turnLeft && !turnRight) side = 'right';
-      else if (turnRight && !turnLeft) side = 'left';
+      // +X is the player's left from the camera behind the boat, so the mesh
+      // named "right" sits on the left of the screen.
+      if (turnLeft && !turnRight) side = 'left';
+      else if (turnRight && !turnLeft) side = 'right';
       else if (input.forward) side = sequenceSide;
       if (side) {
         beginStroke(side);
@@ -471,9 +473,15 @@ export function createBoat() {
     lanternColor: new THREE.Color(0xffb45a),
     blades() {
       group.updateWorldMatrix(true, true);
+      const point = (pivot) => {
+        pivot.userData.blade.getWorldPosition(bladeWorld);
+        return bladeWorld.clone();
+      };
       return {
         left: bladeHeight(oarL),
         right: bladeHeight(oarR),
+        leftPoint: point(oarL),
+        rightPoint: point(oarR),
         strokeLeft: strokeT.left,
         strokeRight: strokeT.right,
       };

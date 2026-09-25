@@ -23,6 +23,8 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uCol[16];
   uniform float uGain[16];
   uniform float uTight[16];
+  uniform sampler2D uNormal;
+  uniform sampler2D uRough;
 
   varying vec3 vWorld;
 
@@ -51,19 +53,25 @@ const fragmentShader = /* glsl */ `
     float hz = waveH(p + vec2(0.0, e)) - h;
     vec3 n = normalize(vec3(-hx / e, 1.0, -hz / e));
     vec3 viewDir = normalize(cameraPosition - vWorld);
-    float micro = sin(p.x * 22.0 + uTime * 1.7) * sin(p.y * 17.0 - uTime * 1.25);
-    float fine = sin(p.x * 47.0 + p.y * 29.0 - uTime * 2.2);
-    n.x += micro * 0.045 + fine * 0.018;
-    n.z += cos(p.x * 19.0 - p.y * 26.0 + uTime * 1.5) * 0.04 + sin(fine) * 0.012;
-    n = normalize(n);
+    vec2 uvA = p * 0.72 + vec2(uTime * 0.013, uTime * 0.008);
+    vec2 uvB = p * 1.45 + vec2(-uTime * 0.009, uTime * 0.017);
+    vec3 tnA = texture(uNormal, uvA).xyz * 2.0 - 1.0;
+    vec3 tnB = texture(uNormal, uvB).xyz * 2.0 - 1.0;
+    vec3 tn = tnA + tnB * 0.72;
+    // OpenGL normal on the XZ plane: tangent +X, bitangent along -Z.
+    vec3 rip = vec3(tn.x, tn.z, -tn.y);
+    n = normalize(n + vec3(rip.x, 0.0, rip.z) * 0.62);
+    float rough = texture(uRough, uvA).r;
 
     vec3 deep = mix(vec3(0.0012, 0.0008, 0.0022), vec3(0.03, 0.027, 0.03), uDay);
     float fres = pow(1.0 - clamp(dot(n, viewDir), 0.0, 1.0), 6.0);
-    vec3 color = deep + vec3(0.006, 0.005, 0.01) * fres * (1.0 - uDay * 0.45);
+    vec3 color = deep + vec3(0.008, 0.007, 0.012) * fres * (1.0 - uDay * 0.4);
+    float sheen = pow(clamp(dot(n, viewDir), 0.0, 1.0), mix(70.0, 28.0, rough));
+    color += vec3(0.012, 0.01, 0.014) * sheen;
 
     vec3 refl = vec3(0.0);
     vec2 camXZ = cameraPosition.xz;
-    vec2 viewFwd = p - camXZ;
+    vec2 viewFwd = p + n.xz * 0.42 - camXZ;
     float viewLen = length(viewFwd);
     vec2 vd = viewFwd / max(viewLen, 0.001);
 
@@ -117,6 +125,17 @@ export function createWater() {
     colors.push(new THREE.Color());
   }
 
+  const flatNormal = new THREE.DataTexture(new Uint8Array([128, 128, 255, 255]), 1, 1);
+  flatNormal.needsUpdate = true;
+  flatNormal.colorSpace = THREE.NoColorSpace;
+  flatNormal.wrapS = THREE.RepeatWrapping;
+  flatNormal.wrapT = THREE.RepeatWrapping;
+  const flatRough = new THREE.DataTexture(new Uint8Array([180, 180, 180, 255]), 1, 1);
+  flatRough.needsUpdate = true;
+  flatRough.colorSpace = THREE.NoColorSpace;
+  flatRough.wrapS = THREE.RepeatWrapping;
+  flatRough.wrapT = THREE.RepeatWrapping;
+
   const uniforms = {
     uTime: { value: 0 },
     uDay: { value: 0 },
@@ -129,7 +148,22 @@ export function createWater() {
     uCol: { value: colors },
     uGain: { value: new Float32Array(MAX_LIGHTS) },
     uTight: { value: new Float32Array(MAX_LIGHTS) },
+    uNormal: { value: flatNormal },
+    uRough: { value: flatRough },
   };
+
+  const loader = new THREE.TextureLoader();
+  const bindMap = (url, uniform, fallback) => {
+    loader.load(url, (tex) => {
+      tex.colorSpace = THREE.NoColorSpace;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      uniform.value = tex;
+    });
+    uniform.value = fallback;
+  };
+  bindMap('/assets/water/Foam001_NormalGL.jpg', uniforms.uNormal, flatNormal);
+  bindMap('/assets/water/Foam001_Roughness.jpg', uniforms.uRough, flatRough);
 
   const material = new THREE.ShaderMaterial({
     uniforms,

@@ -263,7 +263,22 @@ window.__ship = {
       hintHidden,
       bowX: ahead.x,
       centerX: center.x,
-      blades: boat.blades(),
+      blades: (() => {
+        const blades = boat.blades();
+        const project = (point) => {
+          const p = point.clone();
+          p.project(camera);
+          return p.x;
+        };
+        return {
+          left: blades.left,
+          right: blades.right,
+          strokeLeft: blades.strokeLeft,
+          strokeRight: blades.strokeRight,
+          leftScreenX: project(blades.leftPoint),
+          rightScreenX: project(blades.rightPoint),
+        };
+      })(),
       hint: hint.textContent,
     };
   },
