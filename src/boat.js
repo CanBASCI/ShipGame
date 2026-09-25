@@ -16,8 +16,12 @@ const YAW_LIMIT = Math.PI / 2;
 // Keel of the loaded hull is local y=-0.12. This leaves the outside keel in
 // the water and the open interior above it.
 const KEEL_RAISE = 0.115;
-// Slightly narrower across the beam. Length and height stay 1.
-const BEAM_NARROW = 0.9;
+// One scale against the model's original beam. Length and height stay 1.
+const BEAM_NARROW = 0.75;
+// Nudge the hull forward of the follow point. The camera distance and height stay put.
+const FRAME_AHEAD = 0.22;
+// Extra drop at the outer end of each blade. The lock and the hull stay where they are.
+const TIP_DIP = 0.12;
 
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
@@ -60,9 +64,27 @@ function makeOarPivot(lock, bladeLocal) {
   pivot.position.copy(lock);
   const blade = new THREE.Object3D();
   blade.position.copy(bladeLocal);
+  blade.position.y -= TIP_DIP;
   pivot.add(blade);
   pivot.userData.blade = blade;
   return pivot;
+}
+
+function dipBladeTip(mesh) {
+  const attr = mesh.geometry.attributes.position;
+  let maxOut = 0;
+  for (let i = 0; i < attr.count; i++) maxOut = Math.max(maxOut, Math.abs(attr.getX(i)));
+  const start = maxOut * 0.72;
+  const span = Math.max(0.001, maxOut - start);
+  for (let i = 0; i < attr.count; i++) {
+    const out = Math.abs(attr.getX(i));
+    if (out <= start) continue;
+    const t = (out - start) / span;
+    const smooth = t * t * (3 - 2 * t);
+    attr.setY(i, attr.getY(i) - TIP_DIP * smooth);
+  }
+  attr.needsUpdate = true;
+  mesh.geometry.computeVertexNormals();
 }
 
 function makeRower(black) {
@@ -156,7 +178,10 @@ export function createBoat() {
   });
 
   const black = new THREE.MeshBasicMaterial({ color: 0x050308 });
-  group.add(makeRower(black));
+  const body = new THREE.Group();
+  body.position.z = FRAME_AHEAD;
+  group.add(body);
+  body.add(makeRower(black));
 
   // Locks sit on the gunwale of the loaded hull. Blades are markers for splash height.
   const oarL = makeOarPivot(
@@ -167,10 +192,10 @@ export function createBoat() {
     new THREE.Vector3(0.812 * BEAM_NARROW, 0.475, 0.057),
     new THREE.Vector3(1.144, -0.372, -0.14),
   );
-  group.add(oarL, oarR);
+  body.add(oarL, oarR);
 
   const lantern = makeLantern(poleMat);
-  group.add(lantern.group);
+  body.add(lantern.group);
 
   const loader = new GLTFLoader();
   loader.load('/assets/boat/rowboat.glb', (gltf) => {
@@ -182,10 +207,16 @@ export function createBoat() {
     const rightOar = gltf.scene.getObjectByName('OarR');
     if (hull) {
       hull.scale.set(BEAM_NARROW, 1, 1);
-      group.add(hull);
+      body.add(hull);
     }
-    if (leftOar) oarL.add(leftOar);
-    if (rightOar) oarR.add(rightOar);
+    if (leftOar) {
+      dipBladeTip(leftOar);
+      oarL.add(leftOar);
+    }
+    if (rightOar) {
+      dipBladeTip(rightOar);
+      oarR.add(rightOar);
+    }
   });
 
   const state = {
