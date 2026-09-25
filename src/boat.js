@@ -20,8 +20,8 @@ const KEEL_RAISE = 0.115;
 const BEAM_NARROW = 0.75;
 // Nudge the hull forward of the follow point. The camera distance and height stay put.
 const FRAME_AHEAD = 0.22;
-// Extra drop at the outer end of each blade. The lock and the hull stay where they are.
-const TIP_DIP = 0.12;
+// Small extra dip of the existing blades toward the water. Does not lengthen them.
+const BLADE_DROP = 0.07;
 
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
@@ -64,27 +64,9 @@ function makeOarPivot(lock, bladeLocal) {
   pivot.position.copy(lock);
   const blade = new THREE.Object3D();
   blade.position.copy(bladeLocal);
-  blade.position.y -= TIP_DIP;
   pivot.add(blade);
   pivot.userData.blade = blade;
   return pivot;
-}
-
-function dipBladeTip(mesh) {
-  const attr = mesh.geometry.attributes.position;
-  let maxOut = 0;
-  for (let i = 0; i < attr.count; i++) maxOut = Math.max(maxOut, Math.abs(attr.getX(i)));
-  const start = maxOut * 0.72;
-  const span = Math.max(0.001, maxOut - start);
-  for (let i = 0; i < attr.count; i++) {
-    const out = Math.abs(attr.getX(i));
-    if (out <= start) continue;
-    const t = (out - start) / span;
-    const smooth = t * t * (3 - 2 * t);
-    attr.setY(i, attr.getY(i) - TIP_DIP * smooth);
-  }
-  attr.needsUpdate = true;
-  mesh.geometry.computeVertexNormals();
 }
 
 function makeRower(black) {
@@ -209,14 +191,8 @@ export function createBoat() {
       hull.scale.set(BEAM_NARROW, 1, 1);
       body.add(hull);
     }
-    if (leftOar) {
-      dipBladeTip(leftOar);
-      oarL.add(leftOar);
-    }
-    if (rightOar) {
-      dipBladeTip(rightOar);
-      oarR.add(rightOar);
-    }
+    if (leftOar) oarL.add(leftOar);
+    if (rightOar) oarR.add(rightOar);
   });
 
   const state = {
@@ -257,11 +233,13 @@ export function createBoat() {
       if (p < 0.62) {
         const u = p / 0.62;
         const e = u * u * (3 - 2 * u);
-        sweep = THREE.MathUtils.lerp(-0.34, 0.46, e);
+        // Reach forward, blade clear of the water.
+        sweep = THREE.MathUtils.lerp(0.34, -0.46, e);
         lift = 0.02;
       } else {
         const u = (p - 0.62) / 0.38;
-        sweep = THREE.MathUtils.lerp(0.46, -0.34, u);
+        // Draw back through the water, bow toward stern.
+        sweep = THREE.MathUtils.lerp(-0.46, 0.34, u);
         lift = Math.sin(u * Math.PI) * -0.28;
       }
     } else {
@@ -269,7 +247,8 @@ export function createBoat() {
       lift = Math.sin(time * 0.5) * 0.012;
     }
     pivot.rotation.y = sign * sweep;
-    pivot.rotation.z = sign * lift;
+    // Brake keeps its own dip. Otherwise the blades sit a little closer to the water.
+    pivot.rotation.z = sign * (lift - (braking ? 0 : BLADE_DROP));
   }
 
   function update(dt, time, input) {
