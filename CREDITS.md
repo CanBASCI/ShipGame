@@ -8,7 +8,15 @@ These files are stored in the repo and loaded by the scene.
 - License: CC0
 - Source: https://polyhaven.com/a/weathered_planks
 - Files: `public/assets/wood/weathered_planks_diff_1k.jpg`, `weathered_planks_nor_gl_1k.jpg`, `weathered_planks_rough_1k.jpg`
-- Use: rowboat hull, seats, and stern post
+- Use: wood grain on the rowboat hull and oars. The maps are applied to generated box UVs; the boat mesh itself is the Simple Wood Boat below.
+
+## Simple Wood Boat
+
+- Author: mikeask
+- License: CC0
+- Source: https://opengameart.org/content/simple-wood-boat
+- File: `public/assets/boat/rowboat.glb`
+- Use: the player's wooden rowboat. Hull and seat come from mikeask's `woodBoat.blend` (body + division), scaled to about 3.6m with the bow pointing down the canal. The single paddle mesh was split into a left oar and a right oar, each pivoted at the gunwale. Box UVs were added so the weathered-planks texture reads on the wood. The dark rower and the warm hanging lamp are not part of that file.
 
 ## Sakura tree
 

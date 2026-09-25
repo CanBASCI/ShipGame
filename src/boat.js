@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const MAX_SPEED = 2.15;
 const OAR_INTERVAL = 0.62;
@@ -8,29 +9,35 @@ const BRAKE_DRAG = 2.5;
 const TURN_RATE = 0.28;
 const TURN_EASE = 2.1;
 const BANK = 4.72;
-
-const WOOD = [0xc49262, 0x8d582f, 0xb67a48, 0x6e4428, 0x9a643c, 0x7a4e30];
+// The canal is a straight run on +Z, so downstream is world yaw 0.
+// A bend would return that stretch's heading instead of this constant.
+const DOWNSTREAM_YAW = 0;
+const YAW_LIMIT = Math.PI / 2;
+// Keel of the loaded hull is local y=-0.12. This leaves the outside keel in
+// the water and the open interior above it.
+const KEEL_RAISE = 0.115;
+// Slightly narrower across the beam. Length and height stay 1.
+const BEAM_NARROW = 0.9;
 
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
-function smoothstep(e0, e1, x) {
-  const t = clamp((x - e0) / (e1 - e0), 0, 1);
-  return t * t * (3 - 2 * t);
+function wrapPi(angle) {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
 
-function halfBeam(t) {
-  const transom = 1 - smoothstep(0.0, 0.16, t);
-  const body = Math.sin(Math.PI * Math.pow(t, 0.72));
-  const pinch = Math.pow(1 - t, 0.45);
-  return 0.46 * transom + 0.62 * body * (0.22 + 0.78 * pinch);
+function downstreamYaw() {
+  return DOWNSTREAM_YAW;
 }
 
-function section(v, hb) {
-  const y = -0.14 + Math.pow(v, 0.58) * 0.52;
-  const x = hb * Math.pow(Math.sin(v * Math.PI * 0.5), 0.7);
-  return { x, y };
+function headingFrom(yaw) {
+  return wrapPi(yaw - downstreamYaw());
+}
+
+function easeToward(current, target, dt) {
+  const ease = 1 - Math.exp(-TURN_EASE * dt);
+  return current + (target - current) * ease;
 }
 
 function loadTex(url, colorSpace) {
@@ -41,74 +48,6 @@ function loadTex(url, colorSpace) {
   return tex;
 }
 
-function bandGeometry(v0, v1, band) {
-  const U = 24;
-  const positions = [];
-  const uvs = [];
-  const colors = [];
-  const indices = [];
-
-  function addStrip(side) {
-    const base = positions.length / 3;
-    for (let i = 0; i <= U; i++) {
-      const t = i / U;
-      const z = -1.68 + t * 3.42;
-      const hb = halfBeam(t);
-      for (const v of [v0, v1]) {
-        const s = section(v, hb);
-        const vn = (v - v0) / Math.max(0.0001, v1 - v0);
-        const seam = vn < 0.1 || vn > 0.88 ? 0.34 : 1;
-        const weather = 0.84 + 0.16 * Math.sin(t * 22 + v * 9);
-        const c = seam * weather;
-        positions.push(side * s.x, s.y, z);
-        uvs.push(t * 2.6, (band + 0.08 + vn * 0.72) / 7);
-        colors.push(c, c * 0.94, c * 0.82);
-      }
-    }
-    for (let i = 0; i < U; i++) {
-      const a = base + i * 2;
-      const b = a + 1;
-      const c = a + 2;
-      const d = a + 3;
-      if (side > 0) indices.push(a, c, b, b, c, d);
-      else indices.push(a, b, c, b, d, c);
-    }
-  }
-
-  addStrip(1);
-  addStrip(-1);
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  return geo;
-}
-
-function transomGeometry() {
-  const V = 7;
-  const t = 0.015;
-  const z = -1.68 + t * 3.42;
-  const hb = halfBeam(t);
-  const positions = [];
-  const indices = [];
-  for (let i = 0; i <= V; i++) {
-    const s = section(i / V, hb);
-    positions.push(-s.x, s.y, z, s.x, s.y, z);
-  }
-  for (let i = 0; i < V; i++) {
-    const a = i * 2;
-    indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  return geo;
-}
-
 function waterY(x, z, time) {
   return (
     Math.sin(x * 0.72 + z * 0.28 + time * 0.48) * 0.03 +
@@ -116,20 +55,12 @@ function waterY(x, z, time) {
   );
 }
 
-function makeOar(side) {
-  const black = new THREE.MeshBasicMaterial({ color: 0x050308 });
+function makeOarPivot(lock, bladeLocal) {
   const pivot = new THREE.Group();
-  const prominent = side > 0;
-  const len = prominent ? 2.28 : 2.05;
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.026, len, 5), black);
-  shaft.rotation.z = Math.PI / 2;
-  shaft.position.set(side * len * 0.46, prominent ? -0.2 : -0.14, -0.16);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(prominent ? 0.64 : 0.5, 0.026, 0.2), black);
-  blade.position.set(side * (len * 0.9), prominent ? -0.52 : -0.42, -0.22);
-  blade.rotation.y = side * -0.22;
-  blade.rotation.z = side * (prominent ? -0.42 : -0.28);
-  pivot.add(shaft, blade);
-  pivot.position.set(side * 0.46, 0.36, -0.02);
+  pivot.position.copy(lock);
+  const blade = new THREE.Object3D();
+  blade.position.copy(bladeLocal);
+  pivot.add(blade);
   pivot.userData.blade = blade;
   return pivot;
 }
@@ -207,87 +138,55 @@ export function createBoat() {
   const woodNor = loadTex('/assets/wood/weathered_planks_nor_gl_1k.jpg', THREE.LinearSRGBColorSpace);
   const woodRough = loadTex('/assets/wood/weathered_planks_rough_1k.jpg', THREE.LinearSRGBColorSpace);
   const plankMaps = { map: woodDiff, normalMap: woodNor, roughnessMap: woodRough };
-
-  const bands = 6;
-  for (let i = 0; i < bands; i++) {
-    const v0 = i / bands;
-    const v1 = (i + 1) / bands;
-    const mat = new THREE.MeshStandardMaterial({
-      ...plankMaps,
-      color: WOOD[i % WOOD.length],
-      roughness: i > 3 ? 0.58 : 0.72,
-      metalness: 0.04,
-      vertexColors: true,
-      side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(bandGeometry(v0, v1, i), mat);
-    group.add(mesh);
-  }
-
-  const transomMat = new THREE.MeshStandardMaterial({
+  const hullMat = new THREE.MeshStandardMaterial({
     ...plankMaps,
-    color: 0xb48962,
-    roughness: 0.8,
+    color: 0xffffff,
+    emissive: 0xffe6c4,
+    emissiveMap: woodDiff,
+    emissiveIntensity: 0.42,
+    roughness: 0.86,
     metalness: 0.02,
     side: THREE.DoubleSide,
   });
-  group.add(new THREE.Mesh(transomGeometry(), transomMat));
-
-  const darkWood = new THREE.MeshStandardMaterial({
-    ...plankMaps,
-    color: 0x8d6a45,
-    roughness: 0.78,
-    metalness: 0.03,
-  });
-  const floorMat = new THREE.MeshStandardMaterial({
+  const poleMat = new THREE.MeshStandardMaterial({
     ...plankMaps,
     color: 0xc4a074,
     roughness: 0.8,
-    metalness: 0.02,
-  });
-
-  for (let i = 0; i < 4; i++) {
-    const plank = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.028, 2.35), floorMat);
-    plank.position.set(-0.27 + i * 0.18, 0.02, -0.05);
-    group.add(plank);
-  }
-
-  const gunwaleGeo = new THREE.BoxGeometry(0.06, 0.045, 2.7);
-  const gunL = new THREE.Mesh(gunwaleGeo, darkWood);
-  gunL.position.set(-0.52, 0.36, -0.15);
-  const gunR = new THREE.Mesh(gunwaleGeo, darkWood);
-  gunR.position.set(0.52, 0.36, -0.15);
-  group.add(gunL, gunR);
-
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.04, 0.2), darkWood);
-  seat.position.set(0, 0.22, -0.18);
-  const seat2 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.035, 0.16), darkWood);
-  seat2.position.set(0, 0.2, 0.55);
-  group.add(seat, seat2);
-
-  const postMat = new THREE.MeshStandardMaterial({
-    ...plankMaps,
-    color: 0xc98448,
-    roughness: 0.66,
     metalness: 0.03,
   });
-  const post = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.98, 0.06), postMat);
-  post.position.set(0, 0.62, -1.62);
-  const postCap = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.09), postMat);
-  postCap.position.set(0, 1.1, -1.62);
-  const bowPost = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.28, 0.04), darkWood);
-  bowPost.position.set(0, 0.32, 1.7);
-  group.add(post, postCap, bowPost);
 
   const black = new THREE.MeshBasicMaterial({ color: 0x050308 });
   group.add(makeRower(black));
 
-  const oarL = makeOar(-1);
-  const oarR = makeOar(1);
+  // Locks sit on the gunwale of the loaded hull. Blades are markers for splash height.
+  const oarL = makeOarPivot(
+    new THREE.Vector3(-0.793 * BEAM_NARROW, 0.465, 0.053),
+    new THREE.Vector3(-1.113, -0.362, -0.136),
+  );
+  const oarR = makeOarPivot(
+    new THREE.Vector3(0.812 * BEAM_NARROW, 0.475, 0.057),
+    new THREE.Vector3(1.144, -0.372, -0.14),
+  );
   group.add(oarL, oarR);
 
-  const lantern = makeLantern(darkWood);
+  const lantern = makeLantern(poleMat);
   group.add(lantern.group);
+
+  const loader = new GLTFLoader();
+  loader.load('/assets/boat/rowboat.glb', (gltf) => {
+    gltf.scene.traverse((obj) => {
+      if (obj.isMesh) obj.material = hullMat;
+    });
+    const hull = gltf.scene.getObjectByName('Hull');
+    const leftOar = gltf.scene.getObjectByName('OarL');
+    const rightOar = gltf.scene.getObjectByName('OarR');
+    if (hull) {
+      hull.scale.set(BEAM_NARROW, 1, 1);
+      group.add(hull);
+    }
+    if (leftOar) oarL.add(leftOar);
+    if (rightOar) oarR.add(rightOar);
+  });
 
   const state = {
     x: 0,
@@ -386,10 +285,26 @@ export function createBoat() {
       if (input.turnLeft && !input.turnRight) turn = 1;
       else if (input.turnRight && !input.turnLeft) turn = -1;
     }
-    const ease = 1 - Math.exp(-TURN_EASE * dt);
-    state.yawRate += (turn * TURN_RATE - state.yawRate) * ease;
+    // The window is fixed on downstream, not on wherever the bow is now.
+    const heading = headingFrom(state.yaw);
+    if (heading >= YAW_LIMIT && turn > 0) turn = 0;
+    if (heading <= -YAW_LIMIT && turn < 0) turn = 0;
+    state.yawRate = easeToward(state.yawRate, turn * TURN_RATE, dt);
 
-    state.yaw += state.yawRate * dt;
+    const step = state.yawRate * dt;
+    const next = heading + step;
+    if (heading > YAW_LIMIT || heading < -YAW_LIMIT) {
+      const edge = heading > 0 ? YAW_LIMIT : -YAW_LIMIT;
+      const ease = 1 - Math.exp(-TURN_EASE * dt);
+      state.yaw += (edge - heading) * ease;
+      state.yawRate = easeToward(state.yawRate, 0, dt);
+    } else if (next > YAW_LIMIT || next < -YAW_LIMIT) {
+      const edge = next > 0 ? YAW_LIMIT : -YAW_LIMIT;
+      state.yaw += edge - heading;
+      state.yawRate = easeToward(state.yawRate, 0, dt);
+    } else {
+      state.yaw += step;
+    }
     state.x += Math.sin(state.yaw) * state.speed * dt;
     state.z += Math.cos(state.yaw) * state.speed * dt;
 
@@ -407,7 +322,10 @@ export function createBoat() {
         const sp = Math.hypot(svx, svz);
         const forwardness = svx * fwdX + svz * fwdZ;
         state.speed = forwardness > 0 ? sp : 0;
-        state.yawRate += -sign * 0.35 * outward;
+        const kick = -sign * 0.35 * outward;
+        const h = headingFrom(state.yaw);
+        const pushesPast = (h >= YAW_LIMIT - 0.02 && kick > 0) || (h <= -YAW_LIMIT + 0.02 && kick < 0);
+        if (!pushesPast) state.yawRate += kick;
       }
     }
 
@@ -421,7 +339,7 @@ export function createBoat() {
     const yR = waterY(state.x + rx * side, state.z + rz * side, time);
     const yL = waterY(state.x - rx * side, state.z - rz * side, time);
 
-    group.position.set(state.x, yC, state.z);
+    group.position.set(state.x, yC + KEEL_RAISE, state.z);
     group.rotation.y = state.yaw;
     group.rotation.x = -(yF - yB) * 0.55 + Math.sin(time * 0.45) * 0.01;
     group.rotation.z = (yR - yL) * 0.7 + Math.sin(time * 0.33 + 1.0) * 0.012;

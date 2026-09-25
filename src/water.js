@@ -84,15 +84,15 @@ const fragmentShader = /* glsl */ `
       float across = length(toL - vd * along);
       float tight = uTight[i];
       float band = exp(-across * across * mix(6.0, 90.0, tight));
-      float gate = smoothstep(-0.2, 0.8, along) * exp(-max(along, 0.0) * mix(0.012, 0.04, tight));
+      // The head of the arrowhead sits on the lantern. The old gate peaked
+      // in front of the lamp and the round core then drew a second spot beside it.
+      float gate = smoothstep(-0.45, 0.0, along) * exp(-max(along, 0.0) * mix(0.012, 0.04, tight));
       float ripple = sin(across * 54.0 + along * 11.0 + uTime * 2.6 + float(i) * 1.7);
       float shim = 0.35 + 0.65 * pow(clamp(0.5 + 0.5 * ripple, 0.0, 1.0), 4.0);
       float distL = length(toL);
       float atten = gain / (1.0 + distL * distL * 0.0022);
       vec3 tint = uCol[i];
       refl += tint * band * gate * shim * atten * 5.2;
-      float core = exp(-distL * distL * mix(0.35, 2.4, tight)) * gain * 0.85;
-      refl += tint * core;
     }
 
     float near = smoothstep(0.15, 3.2, viewLen);
