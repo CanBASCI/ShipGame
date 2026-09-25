@@ -423,7 +423,7 @@ export function createWorld(scene) {
       light.color.copy(tmp);
       light.position.copy(item.L.pos);
       light.distance = item.L.distance;
-      light.intensity = item.L.intensity * THREE.MathUtils.lerp(1, 0.38, day) * reach;
+      light.intensity = item.L.intensity * THREE.MathUtils.lerp(1, 0.38, day) * bambooGlow.value * reach;
     }
 
     sky.mesh.position.copy(boatPos);
