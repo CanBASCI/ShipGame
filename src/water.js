@@ -93,7 +93,17 @@ const fragmentShader = /* glsl */ `
       float distL = length(toL);
       float atten = gain / (1.0 + distL * distL * 0.0022);
       vec3 tint = uCol[i];
-      if (uPatch[i] > 0.5) {
+      if (uPatch[i] > 1.5) {
+        // Moon only: a teardrop that is widest under the moon and thins
+        // as it runs back toward the boat. Not the round boat-lamp patch.
+        float head = smoothstep(-0.9, 0.05, along);
+        float fade = exp(-max(along, 0.0) * 0.1);
+        float t = clamp(along / 16.0, 0.0, 1.0);
+        float k = mix(0.85, 7.5, t);
+        float streak = head * fade * exp(-across * across * k);
+        float ripple = 0.78 + 0.22 * sin(along * 5.5 + uTime * 1.3);
+        refl += tint * streak * ripple * gain * 1.05;
+      } else if (uPatch[i] > 0.5) {
         float soft = exp(-distL * distL * 2.2);
         refl += tint * soft * gain * 1.35;
       } else {
@@ -202,6 +212,6 @@ export function setWaterLights(uniforms, sources) {
     uniforms.uCol.value[i].copy(src.color);
     gain[i] = src.gain;
     tight[i] = src.tight;
-    patch[i] = src.patch ? 1 : 0;
+    patch[i] = src.streak ? 2 : src.patch ? 1 : 0;
   }
 }

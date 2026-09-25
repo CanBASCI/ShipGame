@@ -55,6 +55,22 @@ These files are stored in the repo and loaded by the scene.
 - File: `public/assets/lantern/Lantern_01_1k.gltf`
 - Use: the warm hanging lamp on the bow of the boat. No post. The banks do not use this mesh.
 
+## Full moon
+
+- Author: Sivaln
+- License: CC0
+- Source: https://commons.wikimedia.org/wiki/File:Full_moon_on_24_February_2011.jpg
+- File: `public/assets/moon/full-moon.png`
+- Use: the full moon above the canal centerline. The photograph is Sivaln's "Full moon on 24 February 2011". The black sky around the disc was made transparent so the photo can sit in the night sky. It is not a drawn circle.
+
+## Night-sky star
+
+- Author: Kenney
+- License: CC0
+- Source: https://www.kenney.nl/assets/particle-pack
+- File: `public/assets/stars/star.png`
+- Use: the stars in the night sky. This is `star_07.png` from Kenney's Particle Pack, a soft white star with a transparent background. It is stamped into the sky so the night points stay soft stars, not square cells.
+
 ## Bamboo lantern
 
 - File: `public/assets/lantern/bamboo_lantern.glb`

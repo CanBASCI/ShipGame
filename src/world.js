@@ -445,8 +445,16 @@ export function createWorld(scene) {
 }
 
 function createSky() {
+  const starTex = new THREE.TextureLoader().load('/assets/stars/star.png');
+  starTex.colorSpace = THREE.SRGBColorSpace;
+  starTex.magFilter = THREE.LinearFilter;
+  starTex.minFilter = THREE.LinearMipmapLinearFilter;
+  starTex.wrapS = THREE.ClampToEdgeWrapping;
+  starTex.wrapT = THREE.ClampToEdgeWrapping;
+  starTex.generateMipmaps = true;
   const uniforms = {
     uDay: { value: 0 },
+    uStar: { value: starTex },
     uZenithN: { value: new THREE.Color(0x05010c) },
     uHorizonN: { value: new THREE.Color(0x140a1c) },
     uZenithD: { value: new THREE.Color(0x4a5568) },
@@ -468,6 +476,7 @@ function createSky() {
     fragmentShader: /* glsl */ `
       varying vec3 vDir;
       uniform float uDay;
+      uniform sampler2D uStar;
       uniform vec3 uZenithN;
       uniform vec3 uHorizonN;
       uniform vec3 uZenithD;
@@ -484,10 +493,21 @@ function createSky() {
         vec3 horizon = mix(uHorizonN, uHorizonD, uDay);
         float g = smoothstep(-0.02, 0.48, h);
         vec3 col = mix(horizon, zenith, g);
-        float cell = hash13(floor(dir * 220.0));
-        float star = smoothstep(0.9975, 0.9992, cell);
-        star *= smoothstep(0.05, 0.25, h);
-        col += vec3(0.75, 0.8, 1.0) * star * (1.0 - uDay) * 2.4;
+        // Stamp Kenney's soft star into sparse sky cells. The sprite is
+        // transparent at the corners, so a cell never reads as a hard quad.
+        float scale = 90.0;
+        vec3 id = floor(dir * scale);
+        float pick = hash13(id);
+        float on = smoothstep(0.992, 0.997, pick);
+        vec3 nrm = normalize((id + 0.5) / scale);
+        vec3 upv = abs(nrm.y) > 0.92 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+        vec3 tangent = normalize(cross(upv, nrm));
+        vec3 bitangent = cross(nrm, tangent);
+        vec2 uv = vec2(dot(dir - nrm, tangent), dot(dir - nrm, bitangent)) * scale + 0.5;
+        float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+        vec4 stamp = texture2D(uStar, clamp(uv, 0.0, 1.0));
+        float sky = smoothstep(0.05, 0.25, h) * (1.0 - uDay);
+        col += stamp.rgb * stamp.a * on * inside * sky * 1.6;
         gl_FragColor = vec4(col, 1.0);
       }
     `,

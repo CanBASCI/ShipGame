@@ -42,6 +42,26 @@ const moon = new THREE.DirectionalLight(0x6e6290, 0.045);
 moon.position.set(-18, 24, -8);
 scene.add(moon);
 
+// Sivaln's full-moon photograph, ahead of the boat on the canal centerline.
+const MOON_AHEAD = 30;
+const MOON_HEIGHT = 9.2;
+const fullMoonTex = new THREE.TextureLoader().load('/assets/moon/full-moon.png');
+fullMoonTex.colorSpace = THREE.SRGBColorSpace;
+const fullMoon = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: fullMoonTex,
+  transparent: true,
+  depthWrite: false,
+  fog: true,
+}));
+fullMoon.scale.set(3.075, 3.075, 1);
+fullMoon.position.set(0, MOON_HEIGHT, MOON_AHEAD);
+scene.add(fullMoon);
+const moonColor = new THREE.Color(0xd5e0ff);
+const moonlight = new THREE.DirectionalLight(moonColor, 0);
+moonlight.position.set(0, MOON_HEIGHT, MOON_AHEAD);
+scene.add(moonlight);
+scene.add(moonlight.target);
+
 const world = createWorld(scene);
 const water = createWater();
 scene.add(water.mesh);
@@ -170,6 +190,21 @@ function update(dt) {
     tight: 0.9,
     patch: true,
   });
+  const night = 1 - day;
+  fullMoon.position.set(0, MOON_HEIGHT, boat.state.z + MOON_AHEAD);
+  fullMoon.material.opacity = night;
+  moonlight.position.copy(fullMoon.position);
+  moonlight.target.position.set(0, 1.2, boat.state.z);
+  moonlight.intensity = 0.07 * night;
+  if (night > 0.04) {
+    reflectionScratch.push({
+      pos: fullMoon.position.clone(),
+      color: moonColor,
+      gain: 0.315 * night,
+      tight: 0.35,
+      streak: true,
+    });
+  }
   world.reflections(boat.group.position, reflectionScratch);
   setWaterLights(water.uniforms, reflectionScratch);
 
