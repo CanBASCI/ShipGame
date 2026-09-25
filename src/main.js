@@ -170,7 +170,7 @@ function update(dt) {
   boat.update(dt, time, inputState(day));
   if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
-  world.update(boat.group.position, time, day);
+  world.update(boat.group.position, time, day, boat.state.yaw);
   scene.fog.color.copy(fogNight).lerp(fogDay, day);
   scene.fog.density = world.fogDensity.value;
   world.fogColor.copy(scene.fog.color);
@@ -211,7 +211,7 @@ function update(dt) {
       streak: true,
     });
   }
-  world.reflections(boat.group.position, reflectionScratch);
+  world.reflections(boat.group.position, reflectionScratch, boat.state.yaw);
   setWaterLights(water.uniforms, reflectionScratch);
 
   ambient.intensity = THREE.MathUtils.lerp(0.012, 0.16, day);

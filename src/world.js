@@ -352,7 +352,7 @@ export function createWorld(scene) {
   }
 
   const lightPool = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 10; i++) {
     const light = new THREE.PointLight(0xfff1d0, 0, 14, 2);
     scene.add(light);
     lightPool.push(light);
@@ -363,7 +363,7 @@ export function createWorld(scene) {
   const mist = createMist();
   for (const m of mist.meshes) scene.add(m);
 
-  function update(boatPos, time, day) {
+  function update(boatPos, time, day, yaw = 0) {
     dayUniform.value = day;
     fogDensity.value = THREE.MathUtils.lerp(0.02, 0.015, day);
 
@@ -388,9 +388,7 @@ export function createWorld(scene) {
       }
     }
 
-    const ranked = lanterns
-      .map((L) => ({ L, d: L.pos.distanceToSquared(boatPos) }))
-      .sort((a, b) => a.d - b.d);
+    const ranked = lanternsAhead(boatPos, yaw, 10);
     for (let i = 0; i < lightPool.length; i++) {
       const item = ranked[i];
       const light = lightPool[i];
@@ -408,19 +406,46 @@ export function createWorld(scene) {
     sky.mesh.position.copy(boatPos);
     sky.mesh.position.y = 0;
     sky.uniforms.uDay.value = day;
-    for (const mesh of mist.meshes) {
-      mesh.position.z = boatPos.z + 78;
+    let farAhead = 36;
+    const fx = Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    for (const item of ranked) {
+      const dx = item.L.pos.x - boatPos.x;
+      const dz = item.L.pos.z - boatPos.z;
+      farAhead = Math.max(farAhead, dx * fx + dz * fz);
     }
+    // Kenney mist sits between the boat and the farthest lit lantern,
+    // on the near side of that lantern. It does not continue past it.
+    const mistFar = farAhead;
+    mist.uniforms.uBoat.value.copy(boatPos);
+    mist.uniforms.uYaw.value = yaw;
+    mist.uniforms.uMistStart.value = mistFar;
     mist.uniforms.uDay.value = day;
     mist.uniforms.uTime.value = time;
     mist.uniforms.uFogDensity.value = fogDensity.value;
+    const mistMid = (8 + mistFar) * 0.5;
+    for (const mesh of mist.meshes) {
+      mesh.position.z = boatPos.z + mistMid;
+    }
   }
 
-  function reflections(boatPos, into) {
-    const lanternsNear = lanterns
-      .map((L) => ({ L, d: L.pos.distanceToSquared(boatPos) }))
-      .sort((a, b) => a.d - b.d)
-      .slice(0, 8);
+  function lanternsAhead(boatPos, yaw, count) {
+    const fx = Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    const ahead = [];
+    for (const L of lanterns) {
+      const dx = L.pos.x - boatPos.x;
+      const dz = L.pos.z - boatPos.z;
+      if (dx * fx + dz * fz <= 0) continue;
+      ahead.push({ L, d: dx * dx + dz * dz });
+    }
+    ahead.sort((a, b) => a.d - b.d);
+    if (ahead.length > count) ahead.length = count;
+    return ahead;
+  }
+
+  function reflections(boatPos, into, yaw = 0) {
+    const lanternsNear = lanternsAhead(boatPos, yaw, 10);
     for (const item of lanternsNear) {
       if (into.length >= 15) break;
       tmp.copy(item.L.base).lerp(warm, dayUniform.value * 0.4);
@@ -532,6 +557,9 @@ function createMist() {
     uColor: { value: new THREE.Color(0x0c0612) },
     uFog: { value: fogTex },
     uFogDensity: { value: 0.034 },
+    uBoat: { value: new THREE.Vector3() },
+    uYaw: { value: 0 },
+    uMistStart: { value: 48 },
   };
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -550,6 +578,9 @@ function createMist() {
       uniform float uDay;
       uniform float uTime;
       uniform vec3 uColor;
+      uniform vec3 uBoat;
+      uniform float uYaw;
+      uniform float uMistStart;
       uniform sampler2D uFog;
       void main() {
         vec2 drift = vec2(uTime * 0.015, uTime * 0.008);
@@ -558,8 +589,10 @@ function createMist() {
         float wisp = texture2D(uFog, uvA).a;
         float wispB = texture2D(uFog, uvB).a;
         float mist = clamp(wisp * 0.85 + wispB * 0.55, 0.0, 1.0);
-        float d = distance(vWorld.xz, cameraPosition.xz);
-        float dist = smoothstep(18.0, 72.0, d);
+        float along = (vWorld.x - uBoat.x) * sin(uYaw) + (vWorld.z - uBoat.z) * cos(uYaw);
+        float nearSide = smoothstep(8.0, 16.0, along);
+        float stopAtLantern = 1.0 - smoothstep(uMistStart - 5.0, uMistStart, along);
+        float dist = nearSide * stopAtLantern;
         float a = dist * mist * 0.55 * (1.0 - uDay * 0.65);
         vec3 col = mix(uColor, vec3(0.55, 0.5, 0.48), uDay);
         gl_FragColor = vec4(col, a);
