@@ -1,15 +1,12 @@
 import * as THREE from 'three';
 
 const MAX_SPEED = 2.15;
-const MIN_SPEED = -1.05;
-const OAR_IMPULSE = 0.3;
-const OAR_YAW = 0.22;
 const OAR_INTERVAL = 0.62;
-const THROTTLE_ACCEL = 1.15;
-const REVERSE_ACCEL = 0.62;
 const WATER_DRAG = 0.4;
-const STEER_ACCEL = 0.42;
-const YAW_DRAG = 1.7;
+const CRUISE_ACCEL = MAX_SPEED * WATER_DRAG;
+const BRAKE_DRAG = 2.5;
+const TURN_RATE = 0.28;
+const TURN_EASE = 2.1;
 const BANK = 4.72;
 
 const WOOD = [0xc49262, 0x8d582f, 0xb67a48, 0x6e4428, 0x9a643c, 0x7a4e30];
@@ -36,47 +33,15 @@ function section(v, hb) {
   return { x, y };
 }
 
-function makeWoodTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const g = canvas.getContext('2d');
-  g.fillStyle = '#a87448';
-  g.fillRect(0, 0, 256, 256);
-  for (let y = 14; y < 242; y += 2) {
-    const shade = 168 + Math.floor(Math.sin(y * 0.47) * 28 + Math.random() * 36);
-    g.strokeStyle = `rgba(${shade}, ${Math.floor(shade * 0.58)}, ${Math.floor(shade * 0.28)}, 0.42)`;
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(256, y + Math.sin(y * 0.11) * 1.4);
-    g.stroke();
-  }
-  g.fillStyle = '#3a2414';
-  g.fillRect(0, 0, 256, 12);
-  g.fillRect(0, 244, 256, 12);
-  for (let i = 0; i < 9; i++) {
-    const y = 20 + Math.random() * 210;
-    g.strokeStyle = `rgba(70, 38, 16, ${0.18 + Math.random() * 0.22})`;
-    g.lineWidth = 1 + Math.random() * 1.5;
-    g.beginPath();
-    g.moveTo(0, y);
-    g.bezierCurveTo(70, y + 8, 150, y - 6, 256, y + 3);
-    g.stroke();
-  }
-  for (let i = 0; i < 5; i++) {
-    g.fillStyle = `rgba(90, 52, 24, ${0.12 + Math.random() * 0.12})`;
-    g.beginPath();
-    g.ellipse(40 + Math.random() * 180, 40 + Math.random() * 170, 8 + Math.random() * 14, 3 + Math.random() * 5, 0, 0, Math.PI * 2);
-    g.fill();
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
+function loadTex(url, colorSpace) {
+  const tex = new THREE.TextureLoader().load(url);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 4;
+  tex.colorSpace = colorSpace;
+  tex.anisotropy = 8;
   return tex;
 }
 
-function bandGeometry(v0, v1) {
+function bandGeometry(v0, v1, band) {
   const U = 24;
   const positions = [];
   const uvs = [];
@@ -96,7 +61,7 @@ function bandGeometry(v0, v1) {
         const weather = 0.84 + 0.16 * Math.sin(t * 22 + v * 9);
         const c = seam * weather;
         positions.push(side * s.x, s.y, z);
-        uvs.push(t * 2.4, vn);
+        uvs.push(t * 2.6, (band + 0.08 + vn * 0.72) / 7);
         colors.push(c, c * 0.94, c * 0.82);
       }
     }
@@ -238,26 +203,29 @@ function makeLantern(woodMat) {
 export function createBoat() {
   const group = new THREE.Group();
   group.rotation.order = 'YXZ';
-  const woodTex = makeWoodTexture();
+  const woodDiff = loadTex('/assets/wood/weathered_planks_diff_1k.jpg', THREE.SRGBColorSpace);
+  const woodNor = loadTex('/assets/wood/weathered_planks_nor_gl_1k.jpg', THREE.LinearSRGBColorSpace);
+  const woodRough = loadTex('/assets/wood/weathered_planks_rough_1k.jpg', THREE.LinearSRGBColorSpace);
+  const plankMaps = { map: woodDiff, normalMap: woodNor, roughnessMap: woodRough };
 
   const bands = 6;
   for (let i = 0; i < bands; i++) {
     const v0 = i / bands;
     const v1 = (i + 1) / bands;
     const mat = new THREE.MeshStandardMaterial({
-      map: woodTex,
+      ...plankMaps,
       color: WOOD[i % WOOD.length],
       roughness: i > 3 ? 0.58 : 0.72,
       metalness: 0.04,
       vertexColors: true,
       side: THREE.DoubleSide,
     });
-    const mesh = new THREE.Mesh(bandGeometry(v0, v1), mat);
+    const mesh = new THREE.Mesh(bandGeometry(v0, v1, i), mat);
     group.add(mesh);
   }
 
   const transomMat = new THREE.MeshStandardMaterial({
-    map: woodTex,
+    ...plankMaps,
     color: 0xb48962,
     roughness: 0.8,
     metalness: 0.02,
@@ -266,13 +234,13 @@ export function createBoat() {
   group.add(new THREE.Mesh(transomGeometry(), transomMat));
 
   const darkWood = new THREE.MeshStandardMaterial({
-    map: woodTex,
+    ...plankMaps,
     color: 0x8d6a45,
     roughness: 0.78,
     metalness: 0.03,
   });
   const floorMat = new THREE.MeshStandardMaterial({
-    map: woodTex,
+    ...plankMaps,
     color: 0xc4a074,
     roughness: 0.8,
     metalness: 0.02,
@@ -298,7 +266,7 @@ export function createBoat() {
   group.add(seat, seat2);
 
   const postMat = new THREE.MeshStandardMaterial({
-    map: woodTex,
+    ...plankMaps,
     color: 0xc98448,
     roughness: 0.66,
     metalness: 0.03,
@@ -331,17 +299,18 @@ export function createBoat() {
   const cooldown = { left: 0, right: 0 };
   const strokeT = { left: -1, right: -1 };
 
-  function applyStroke(side) {
-    const sign = side === 'left' ? -1 : 1;
-    state.speed = clamp(state.speed + OAR_IMPULSE, MIN_SPEED, MAX_SPEED);
-    state.yawRate = clamp(state.yawRate + sign * OAR_YAW, -0.7, 0.7);
+  let sequenceSide = 'left';
+  let sequenceWait = 0;
+  let braking = false;
+
+  function beginStroke(side) {
     strokeT[side] = 0;
     cooldown[side] = OAR_INTERVAL;
   }
 
   function tryStroke(side) {
     if (cooldown[side] > 0) return false;
-    applyStroke(side);
+    beginStroke(side);
     return true;
   }
 
@@ -350,7 +319,10 @@ export function createBoat() {
     const t = strokeT[side];
     let sweep = 0;
     let lift = 0;
-    if (t >= 0) {
+    if (braking) {
+      sweep = 0.12;
+      lift = -0.42;
+    } else if (t >= 0) {
       const p = t / OAR_INTERVAL;
       if (p < 0.62) {
         const u = p / 0.62;
@@ -371,10 +343,8 @@ export function createBoat() {
   }
 
   function update(dt, time, input) {
-    const throttle = input.throttle;
-    const accel = throttle >= 0 ? THROTTLE_ACCEL : REVERSE_ACCEL;
-    state.speed += throttle * accel * dt;
-    state.yawRate += input.steer * STEER_ACCEL * dt;
+    braking = !!input.brake;
+    sequenceWait = Math.max(0, sequenceWait - dt);
 
     for (const side of ['left', 'right']) {
       cooldown[side] = Math.max(0, cooldown[side] - dt);
@@ -382,14 +352,40 @@ export function createBoat() {
         strokeT[side] += dt;
         if (strokeT[side] > OAR_INTERVAL) strokeT[side] = -1;
       }
-      if (input[side] && cooldown[side] <= 0) applyStroke(side);
     }
 
-    state.speed = clamp(state.speed, MIN_SPEED, MAX_SPEED);
-    state.yawRate = clamp(state.yawRate, -0.7, 0.7);
-    state.speed *= Math.exp(-WATER_DRAG * dt);
-    state.yawRate *= Math.exp(-YAW_DRAG * dt);
-    if (Math.abs(state.speed) < 0.004) state.speed = 0;
+    if (braking) {
+      strokeT.left = -1;
+      strokeT.right = -1;
+    } else if (sequenceWait <= 0) {
+      const turnLeft = !!input.turnLeft;
+      const turnRight = !!input.turnRight;
+      let side = null;
+      if (turnLeft && !turnRight) side = 'right';
+      else if (turnRight && !turnLeft) side = 'left';
+      else if (input.forward) side = sequenceSide;
+      if (side) {
+        beginStroke(side);
+        sequenceWait = OAR_INTERVAL;
+        if (input.forward && turnLeft === turnRight) {
+          sequenceSide = side === 'left' ? 'right' : 'left';
+        }
+      }
+    }
+
+    if (input.forward && !braking) state.speed += CRUISE_ACCEL * dt;
+    const drag = braking ? BRAKE_DRAG : WATER_DRAG;
+    state.speed *= Math.exp(-drag * dt);
+    state.speed = clamp(state.speed, 0, MAX_SPEED);
+    if (state.speed < 0.01 && (braking || !input.forward)) state.speed = 0;
+
+    let turn = 0;
+    if (!braking) {
+      if (input.turnLeft && !input.turnRight) turn = 1;
+      else if (input.turnRight && !input.turnLeft) turn = -1;
+    }
+    const ease = 1 - Math.exp(-TURN_EASE * dt);
+    state.yawRate += (turn * TURN_RATE - state.yawRate) * ease;
 
     state.yaw += state.yawRate * dt;
     state.x += Math.sin(state.yaw) * state.speed * dt;
@@ -408,7 +404,7 @@ export function createBoat() {
         const svz = vz;
         const sp = Math.hypot(svx, svz);
         const forwardness = svx * fwdX + svz * fwdZ;
-        state.speed = forwardness >= 0 ? sp : -sp;
+        state.speed = forwardness > 0 ? sp : 0;
         state.yawRate += -sign * 0.35 * outward;
       }
     }
@@ -442,12 +438,45 @@ export function createBoat() {
     return lantern.group.localToWorld(lanternWorld.copy(lantern.localPos));
   }
 
+  const bladeWorld = new THREE.Vector3();
+  function bladeHeight(pivot) {
+    pivot.userData.blade.getWorldPosition(bladeWorld);
+    return bladeWorld.y;
+  }
+
+  function reset() {
+    state.x = 0;
+    state.z = 0;
+    state.yaw = 0;
+    state.speed = 0;
+    state.yawRate = 0;
+    strokeT.left = -1;
+    strokeT.right = -1;
+    cooldown.left = 0;
+    cooldown.right = 0;
+    sequenceSide = 'left';
+    sequenceWait = 0;
+    braking = false;
+    group.position.set(0, 0, 0);
+    group.rotation.set(0, 0, 0);
+  }
+
   return {
     group,
     state,
     tryStroke,
     update,
+    reset,
     lanternPosition,
     lanternColor: new THREE.Color(0xffb45a),
+    blades() {
+      group.updateWorldMatrix(true, true);
+      return {
+        left: bladeHeight(oarL),
+        right: bladeHeight(oarR),
+        strokeLeft: strokeT.left,
+        strokeRight: strokeT.right,
+      };
+    },
   };
 }

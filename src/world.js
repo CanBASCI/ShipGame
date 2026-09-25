@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const CHUNK = 42;
 const KEEP_BEHIND = 1;
@@ -57,17 +58,18 @@ const puffFragment = /* glsl */ `
   uniform float uDay;
   uniform vec3 uFogColor;
   uniform float uFogDensity;
+  uniform sampler2D uAlpha;
+  uniform sampler2D uDiff;
   void main() {
-    vec2 p = vUv * 2.0 - 1.0;
-    float r = dot(p, p);
-    if (r > 1.0) discard;
-    float rad = sqrt(r);
-    float petal = pow(1.0 - rad, 1.7);
-    float core = pow(1.0 - rad, 5.0);
+    float mask = texture(uAlpha, vUv).r;
+    if (mask < 0.22) discard;
+    float petal = smoothstep(0.22, 0.9, mask);
+    float core = pow(petal, 2.4);
     vec3 warm = vec3(1.0, 0.62, 0.45);
     vec3 col = mix(vColor, mix(vColor, warm, 0.55), uDay * 0.7);
     col *= mix(1.0, 0.62, uDay);
     col *= mix(0.45, 1.0, petal);
+    col *= mix(vec3(1.0), texture(uDiff, vUv).rgb, 0.4);
     col += vColor * core * mix(0.42, 0.12, uDay);
     float dist = distance(vWorld, cameraPosition);
     float fog = exp(-uFogDensity * uFogDensity * dist * dist);
@@ -109,12 +111,29 @@ export function createWorld(scene) {
   const fogColor = new THREE.Color(0x0c0612);
   const fogDensity = { value: 0.034 };
 
+  const blossomFallback = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  blossomFallback.needsUpdate = true;
+  blossomFallback.colorSpace = THREE.NoColorSpace;
+  const blossomAlpha = new THREE.TextureLoader().load(
+    '/assets/blossoms/flower_heliophila_alpha_1k.png',
+    (tex) => {
+      tex.colorSpace = THREE.NoColorSpace;
+      tex.needsUpdate = true;
+      puffMat.uniforms.uAlpha.value = tex;
+    },
+  );
+  blossomAlpha.colorSpace = THREE.NoColorSpace;
+  const blossomDiff = new THREE.TextureLoader().load('/assets/blossoms/flower_heliophila_diff_1k.jpg');
+  blossomDiff.colorSpace = THREE.SRGBColorSpace;
+
   const puffMat = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
       uDay: dayUniform,
       uFogColor: { value: fogColor },
       uFogDensity: fogDensity,
+      uAlpha: { value: blossomFallback },
+      uDiff: { value: blossomDiff },
     },
     vertexShader: puffVertex,
     fragmentShader: puffFragment,
@@ -158,6 +177,18 @@ export function createWorld(scene) {
   const chunks = new Map();
   const lanterns = [];
   const masses = [];
+  let lanternTemplate = null;
+  const lanternQueue = [];
+  new GLTFLoader().load(
+    '/assets/lantern/Lantern_01_1k.gltf',
+    (gltf) => {
+      lanternTemplate = gltf.scene;
+      const jobs = lanternQueue.splice(0, lanternQueue.length);
+      for (const job of jobs) job(lanternTemplate);
+    },
+    undefined,
+    (err) => console.error(err),
+  );
   const tmp = new THREE.Color();
   const warm = new THREE.Color(0xffb36a);
 
@@ -393,7 +424,7 @@ export function createWorld(scene) {
 
     const headY = poleH - 0.08;
     const world = new THREE.Vector3(px + hang, headY, index * CHUNK + spec.z);
-    lanterns.push({
+    const record = {
       chunk: index,
       pos: world,
       base: new THREE.Color(spec.color),
@@ -405,7 +436,43 @@ export function createWorld(scene) {
       emNight: hero ? 3.1 : distant ? 6.2 : 4.4,
       emDay: 1.35,
       coreNight: distant ? 16 : hero ? 10 : 12,
-    });
+    };
+    lanterns.push(record);
+
+    const placeModel = (template) => {
+      if (!lanterns.includes(record)) return;
+      const model = template.clone(true);
+      const color = new THREE.Color(spec.color);
+      model.traverse((obj) => {
+        if (!obj.isMesh || !obj.material) return;
+        if (obj.material.name !== 'Lantern_01_glass' && obj.name !== 'Lantern_01_glass') return;
+        const mat = new THREE.MeshStandardMaterial({
+          color,
+          emissive: color,
+          emissiveIntensity: hero ? 2.8 : 3.6,
+          transparent: true,
+          opacity: 0.7,
+          roughness: 0.16,
+          metalness: 0,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        mat.userData.dispose = true;
+        obj.material = mat;
+        record.mats.unshift(mat);
+      });
+      const targetH = hero ? 1.05 : 0.46 + spec.scale * 0.28;
+      model.scale.setScalar(targetH / 0.294);
+      model.position.set(0, -targetH, 0);
+      const hook = new THREE.Group();
+      hook.position.set(hang, poleH - 0.02, 0);
+      hook.add(model);
+      g.attach(core);
+      g.add(hook);
+      housing.visible = false;
+    };
+    if (lanternTemplate) placeModel(lanternTemplate);
+    else lanternQueue.push(placeModel);
   }
 
   function buildChunk(index) {
@@ -545,13 +612,14 @@ export function createWorld(scene) {
       tmp.copy(L.base).lerp(warm, day * 0.4);
       const em = THREE.MathUtils.lerp(L.emNight, L.emDay, day);
       const coreEm = THREE.MathUtils.lerp(L.coreNight || em * 2.2, L.emDay * 1.4, day);
-      L.mats[0].color.copy(tmp);
-      L.mats[0].emissive.copy(tmp);
-      L.mats[0].emissiveIntensity = em;
-      const core = tmp.clone().lerp(warm, 0.35);
-      L.mats[1].color.copy(core);
-      L.mats[1].emissive.copy(core);
-      L.mats[1].emissiveIntensity = coreEm;
+      const coreTint = tmp.clone().lerp(warm, 0.35);
+      for (let i = 0; i < L.mats.length; i++) {
+        const m = L.mats[i];
+        const isCore = i === L.mats.length - 1;
+        m.color.copy(isCore ? coreTint : tmp);
+        m.emissive.copy(isCore ? coreTint : tmp);
+        m.emissiveIntensity = isCore ? coreEm : em;
+      }
     }
 
     const ranked = lanterns

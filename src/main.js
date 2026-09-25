@@ -75,22 +75,17 @@ function dayAmount() {
 }
 
 function inputState(day) {
-  const throttle = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
-  const steer = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
   return {
-    throttle,
-    steer,
-    left: keys.has('KeyQ'),
-    right: keys.has('KeyE'),
+    forward: keys.has('KeyW') || keys.has('ArrowUp'),
+    brake: keys.has('KeyS') || keys.has('ArrowDown'),
+    turnLeft: keys.has('KeyA') || keys.has('ArrowLeft'),
+    turnRight: keys.has('KeyD') || keys.has('ArrowRight'),
     day,
   };
 }
 
 function pressCode(code) {
   keys.add(code);
-  hideHint();
-  if (code === 'KeyQ') boat.tryStroke('left');
-  if (code === 'KeyE') boat.tryStroke('right');
 }
 
 function releaseCode(code) {
@@ -149,7 +144,7 @@ function update(dt) {
   const day = dayAmount();
   time += dt;
   boat.update(dt, time, inputState(day));
-  if (Math.abs(boat.state.speed) > 0.2) hideHint();
+  if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
   world.update(boat.group.position, time, day);
   scene.fog.color.copy(fogNight).lerp(fogDay, day);
@@ -232,6 +227,9 @@ window.__ship = {
     frames += 1;
     window.__ship.ready = true;
   },
+  sim(dt) {
+    update(dt);
+  },
   press(code) {
     pressCode(code);
   },
@@ -241,15 +239,32 @@ window.__ship = {
   setTime(t) {
     time = t;
   },
+  reset() {
+    keys.clear();
+    boat.reset();
+    hintHidden = false;
+    hint.classList.remove('hide');
+  },
   state() {
+    const ahead = boat.group.position.clone();
+    ahead.x += Math.sin(boat.state.yaw) * 6;
+    ahead.z += Math.cos(boat.state.yaw) * 6;
+    const center = boat.group.position.clone();
+    ahead.project(camera);
+    center.project(camera);
     return {
       x: boat.state.x,
       z: boat.state.z,
       yaw: boat.state.yaw,
+      yawRate: boat.state.yawRate,
       speed: boat.state.speed,
       day: dayAmount(),
       time,
       hintHidden,
+      bowX: ahead.x,
+      centerX: center.x,
+      blades: boat.blades(),
+      hint: hint.textContent,
     };
   },
 };
