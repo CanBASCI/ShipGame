@@ -41,7 +41,7 @@ export function createWorld(scene) {
   const chunks = new Map();
   const lanterns = [];
   const masses = [];
-  let sakuraTemplate = null;
+  let sakuraVariants = null;
   let lanternTemplate = null;
   const treeQueue = [];
   const lanternQueue = [];
@@ -49,34 +49,40 @@ export function createWorld(scene) {
   loader.load(
     '/assets/trees/sakura.glb',
     (gltf) => {
-      const model = gltf.scene;
-      model.updateMatrixWorld(true);
-      let trunkMesh = null;
-      let trunkSpan = 0;
-      model.traverse((obj) => {
-        if (!obj.isMesh || obj.userData.role !== 'dark') return;
-        const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
-        const span = Math.max(size.x, size.y, size.z);
-        if (span > trunkSpan) {
-          trunkSpan = span;
-          trunkMesh = obj;
-          trunkMesh.userData.axis = size;
-          trunkMesh.userData.isTrunk = true;
-        }
+      const found = [];
+      gltf.scene.traverse((obj) => {
+        if (/^Sakura[ABC]$/.test(obj.name)) found.push(obj);
       });
-      if (trunkMesh) {
-        const size = trunkMesh.userData.axis;
-        // The file's trunk is a long cylinder. Turn that axis to world up
-        // before any bank yaw is applied.
-        if (size.x >= size.y && size.x >= size.z) model.rotation.z = Math.PI / 2;
-        else if (size.z > size.y && size.z >= size.x) model.rotation.x = -Math.PI / 2;
-        model.updateMatrixWorld(true);
-        const base = new THREE.Box3().setFromObject(trunkMesh);
-        model.position.y -= base.min.y;
+      found.sort((a, b) => a.name.localeCompare(b.name));
+      for (const node of found) {
+        node.removeFromParent();
+        node.traverse((obj) => {
+          if (!obj.isMesh || !obj.material) return;
+          const bark = /bark/i.test(obj.material.name);
+          const mat = obj.material.clone();
+          mat.name = obj.material.name;
+          mat.metalness = 0;
+          if (bark) {
+            mat.color.set(0xffffff);
+            mat.emissive.set(0xfff0dd);
+            mat.emissiveMap = mat.map;
+            mat.emissiveIntensity = 0.7;
+            mat.roughness = 0.88;
+          } else {
+            mat.emissiveMap = mat.map;
+            mat.emissive.set(0xffffff);
+            mat.emissiveIntensity = 0.48;
+            mat.alphaTest = 0.4;
+            mat.transparent = false;
+            mat.depthWrite = true;
+            mat.side = THREE.DoubleSide;
+            mat.roughness = 0.72;
+          }
+          mat.userData.bark = bark;
+          obj.material = mat;
+        });
       }
-      const pivot = new THREE.Group();
-      pivot.add(model);
-      sakuraTemplate = pivot;
+      sakuraVariants = found;
       const jobs = treeQueue.splice(0, treeQueue.length);
       for (const job of jobs) job();
     },
@@ -116,34 +122,20 @@ export function createWorld(scene) {
     const place = (fromQueue) => {
       if (fromQueue && !parent.parent) return;
       const color = blossomHex(side, rng, index, false);
-      const tree = sakuraTemplate.clone(true);
-      // The downloaded tree is already about 4.7m tall with roots at y=0.
-      const scale = side < 0 ? 1.05 + rng() * 0.7 : 0.85 + rng() * 0.5;
+      const variant = sakuraVariants[Math.floor(rng() * sakuraVariants.length)];
+      const tree = variant.clone(true);
+      // Each variant is already about 5.4m with its roots at y=0.
+      const scale = side < 0 ? 0.78 + rng() * 0.36 : 0.62 + rng() * 0.28;
       tree.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
-        // Blossom clusters ship with the file as role "secondary".
-        // The file's trunk is a thin near-black cylinder. Thicken the shaft
-        // and hold it at a wood brown so it stays visible in the night scene.
-        if (obj.userData.role === 'dark') {
-          const radial = obj.userData.isTrunk ? 4.4 : 2.4;
-          obj.scale.x *= radial;
-          obj.scale.z *= radial;
-          const bark = obj.material.clone();
-          bark.color.set(0xc4a06a);
-          bark.emissive.set(0x8a5a32);
-          bark.emissiveIntensity = obj.userData.isTrunk ? 1.05 : 0.72;
-          bark.roughness = 0.78;
-          bark.metalness = 0;
-          bark.userData.dispose = true;
-          obj.material = bark;
-          return;
-        }
-        if (obj.userData.role !== 'secondary') return;
         const mat = obj.material.clone();
-        mat.color.copy(color);
-        mat.emissive.copy(color);
-        mat.emissiveIntensity = 0.35;
         mat.userData.dispose = true;
+        if (!mat.userData.bark) {
+          // Keep the petal photo. The bank hue only shifts it.
+          mat.color.set(0xffffff).lerp(color, 0.62);
+          mat.emissive.copy(color);
+          mat.emissiveIntensity = 0.62;
+        }
         obj.material = mat;
       });
       tree.position.set(x, 0, z);
@@ -159,13 +151,13 @@ export function createWorld(scene) {
       parent.add(tree);
       masses.push({
         chunk: index,
-        pos: new THREE.Vector3(x - side * scale * 0.9, scale * 3.4, index * CHUNK + z),
+        pos: new THREE.Vector3(x - side * scale * 1.1, scale * 4.4, index * CHUNK + z),
         base: color.clone(),
         gain: 0.85,
         tight: 0.42,
       });
     };
-    if (sakuraTemplate) place(false);
+    if (sakuraVariants) place(false);
     else treeQueue.push(() => place(true));
   }
 
