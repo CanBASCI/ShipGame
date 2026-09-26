@@ -403,7 +403,7 @@ export function createWorld(scene) {
     for (const L of lanterns) {
       tmp.copy(L.base).lerp(warm, day * 0.25);
       const em = THREE.MathUtils.lerp(L.emNight, L.emDay, day);
-      const reach = reachOf.get(L) ?? 1;
+      const reach = reachOf.get(L) ?? 0;
       const glow = bambooGlow.value * bambooOn.value;
       for (const m of L.mats) {
         if (m.userData.role !== 'paper') continue;
@@ -469,7 +469,7 @@ export function createWorld(scene) {
 
   function reflections(boatPos, into, yaw = 0) {
     if (bambooOn.value < 0.5) return into;
-    const lanternsNear = lanternsAhead(boatPos, yaw, Number.POSITIVE_INFINITY);
+    const lanternsNear = lanternsAhead(boatPos, yaw, 10);
     for (const item of lanternsNear) {
       const reach = lanternReach(Math.sqrt(item.d));
       tmp.copy(item.L.base).lerp(warm, dayUniform.value * 0.4);
