@@ -390,6 +390,44 @@ function tintHandLamp(root) {
   paintLampGlass(root, HAND_LAMP_COLOR, handPower);
 }
 
+// Lowest vertex after the current transform. A rolled bounding box hangs below the wood.
+function lowestPointY(root) {
+  const v = new THREE.Vector3();
+  let minY = Infinity;
+  root.updateWorldMatrix(true, true);
+  root.traverse((obj) => {
+    if (!obj.isMesh || !obj.geometry || !obj.geometry.attributes.position) return;
+    const pos = obj.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i += 1) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld);
+      if (v.y < minY) minY = v.y;
+    }
+  });
+  return minY;
+}
+
+function lowestSoleY(root) {
+  const normalMatrix = new THREE.Matrix3();
+  const v = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  let sole = Infinity;
+  root.updateWorldMatrix(true, true);
+  root.traverse((obj) => {
+    if (!obj.isMesh || !obj.geometry || !obj.geometry.attributes.position || !obj.geometry.attributes.normal) return;
+    const pos = obj.geometry.attributes.position;
+    const nrm = obj.geometry.attributes.normal;
+    normalMatrix.getNormalMatrix(obj.matrixWorld);
+    for (let i = 0; i < pos.count; i += 1) {
+      n.fromBufferAttribute(nrm, i).applyMatrix3(normalMatrix);
+      const len = n.length();
+      if (len < 1e-6 || n.y > -0.65 * len) continue;
+      v.fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld);
+      if (v.y < sole) sole = v.y;
+    }
+  });
+  return Number.isFinite(sole) ? sole : null;
+}
+
 export function createObstacles(scene) {
   const loader = new GLTFLoader();
   const templates = new Map();
@@ -526,10 +564,13 @@ export function createObstacles(scene) {
         tuneObject(root, type.id === 'ghost_blood');
         const scale = type.fitAcross ? type.fitAcross / across : TARGET_HEIGHT / height;
         const center = box.getCenter(new THREE.Vector3());
+        // Daughter's visible hem is already the bottom of the mesh. Blood's soles
+        // sit above a card, so the card was meeting the water and the feet were not.
+        const sole = type.id === 'ghost_blood' ? lowestSoleY(root) : null;
         templates.set(type.id, {
           scene: root,
           scale,
-          foot: box.min.y,
+          foot: sole == null ? box.min.y : sole,
           centerX: center.x,
           centerZ: center.z,
           alignYaw: size.z > size.x ? Math.PI / 2 : 0,
@@ -577,8 +618,10 @@ export function createObstacles(scene) {
     const rolled = new THREE.Box3().setFromObject(model);
     const rolledCenter = rolled.getCenter(new THREE.Vector3());
     const rolledSize = rolled.getSize(new THREE.Vector3());
-    // Seat the new bottom on y=0 and keep the length centered across the lanes.
-    model.position.set(-rolledCenter.x, -rolled.min.y, -rolledCenter.z);
+    // The box corners sit below the rolled wood. Seat the real lowest vertex on the crest.
+    const low = lowestPointY(model);
+    const seat = Number.isFinite(low) ? low : rolled.min.y;
+    model.position.set(-rolledCenter.x, -seat, -rolledCenter.z);
     group.position.set(0, 0, z);
     group.rotation.y = template.alignYaw;
     scene.add(group);
@@ -588,7 +631,7 @@ export function createObstacles(scene) {
       mixer: null,
       lane: 1,
       z,
-      foot: -rolled.min.y,
+      foot: -seat,
       centerX: -rolledCenter.x,
       centerZ: -rolledCenter.z,
       rollX: roll,
