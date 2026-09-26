@@ -10,6 +10,7 @@ import { createWorld } from './world.js';
 const canvas = document.getElementById('c');
 const hint = document.getElementById('hint');
 const overEl = document.getElementById('over');
+const playAgainButton = document.getElementById('play-again');
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
@@ -94,6 +95,14 @@ function endRun(on) {
   overEl.classList.toggle('show', arcadeOver);
 }
 
+function playAgain() {
+  if (!tune.arcade || !arcadeOver) return;
+  keys.clear();
+  boat.reset();
+  world.setArcade(true);
+  endRun(false);
+}
+
 function hideHint() {
   if (hintHidden) return;
   hintHidden = true;
@@ -134,10 +143,7 @@ window.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
   if (event.code === 'Space' && arcadeOver && tune.arcade) {
-    keys.clear();
-    boat.reset();
-    world.setArcade(true);
-    endRun(false);
+    playAgain();
     return;
   }
   pressCode(event.code);
@@ -342,6 +348,10 @@ fogToggle.addEventListener('click', () => {
   tune.fog = !tune.fog;
   fogToggle.setAttribute('aria-pressed', String(tune.fog));
   applyTune();
+});
+
+playAgainButton.addEventListener('click', () => {
+  playAgain();
 });
 
 arcadeToggle.addEventListener('click', () => {

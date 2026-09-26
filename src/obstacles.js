@@ -242,7 +242,9 @@ export function createObstacles(scene) {
         if (item.face && bow) {
           const dx = bow.x - item.group.position.x;
           const dz = bow.z - item.group.position.z;
-          if (dx * dx + dz * dz > 1e-6) item.group.rotation.y = Math.atan2(dx, dz);
+          // atan2 aims the group's +Z at the lantern. This rig's face is -Z,
+          // so the extra half-turn points the face at the bow at any distance.
+          if (dx * dx + dz * dz > 1e-6) item.group.rotation.y = Math.atan2(dx, dz) + Math.PI;
         }
         if (overlaps(boatPos, item)) hit = true;
       }
