@@ -16,8 +16,8 @@ const HIT_X = 1.25;
 const HIT_AHEAD = 2.15;
 const HIT_BEHIND = 1.25;
 // Beyond this distance a ghost keeps the heading it spawned with.
-// Inside it, the yaw eases onto the bow lantern and is finished by LOOK_DONE,
-// still short of the boat.
+// Inside it, the yaw ease-in onto the bow lantern is slow at first and
+// fast near the end, finished by LOOK_DONE, still short of the boat.
 const LOOK_FROM = 20;
 const LOOK_DONE = 8;
 
@@ -276,7 +276,7 @@ export function createObstacles(scene) {
             if (along <= LOOK_DONE) yaw = target;
             else {
               const t = (LOOK_FROM - along) / (LOOK_FROM - LOOK_DONE);
-              const s = 1 - (1 - t) * (1 - t);
+              const s = t * t;
               yaw = item.spawnYaw + wrapAngle(target - item.spawnYaw) * s;
             }
           }
