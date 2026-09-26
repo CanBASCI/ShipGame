@@ -112,7 +112,7 @@ These files are stored in the repo and loaded by the scene.
 - License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
 - Source: https://sketchfab.com/3d-models/ghost-4e71afbfee0047768ed0ddb3982d9887
 - Files: `public/assets/obstacles/ghost_blood/scene.gltf`, `scene.bin`, `license.txt`, and `textures/`
-- Use: an Arcade obstacle mixed with the ghost daughter and the rock. Copies stand on the water in the lanes. This model has no clip and no lantern mesh. A red light inside the cloak lights only this ghost. About half of them, chosen when they spawn, fly into an empty lane. The flight starts at 20 m and lasts 2 seconds: they turn toward that lane as they move, rise and lean head-first through the middle, then land upright and follow the bow lantern. The rest keep the heading they spawned with. Arcade off does not show them.
+- Use: an Arcade obstacle mixed with the ghost daughter and the rock. Copies stand on the water in the lanes. This model has no clip and no lantern mesh. A white light inside the cloak lights only this ghost. About half of them, chosen when they spawn, fly into an empty lane. The flight starts at 20 m and lasts 2 seconds: they turn toward that lane as they move, rise and lean head-first through the middle, land upright, and keep that heading. The rest keep the heading they spawned with. Arcade off does not show them.
 - This work is based on "Ghost" (https://sketchfab.com/3d-models/ghost-4e71afbfee0047768ed0ddb3982d9887) by kira.is.real (https://sketchfab.com/jadeisreal0615) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
 
 ## Rock

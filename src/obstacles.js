@@ -24,8 +24,8 @@ const LOOK_DONE = 8;
 // Normal-mode bamboo orange from LANTERN_PALETTE.
 const HAND_LAMP_SCALE = 0.85;
 const HAND_LAMP_COLOR = 0xff7a2a;
-// The red the daughter lantern used before it turned orange. Blood's lamp only.
-const BLOOD_LAMP_COLOR = 0xff3d6e;
+// Arcade bamboo white. Blood has no lantern mesh; this only tints the ghost.
+const BLOOD_LAMP_COLOR = 0xf4f0ff;
 // Opening glass strength, and how strongly that lamp lights the ghost.
 const HAND_LAMP_EMISSIVE = 4;
 const HAND_LAMP_BODY = 0.2;
@@ -632,21 +632,20 @@ export function createObstacles(scene) {
         item.group.position.set(x, waterY(x, item.z, time) + hop, item.z);
         if (item.type === 'ghost_blood') {
           // Stayers keep the heading they spawned with and stay upright.
-          // A slider turns toward the empty lane while it flies, leans with
-          // the speed, lands upright, then tracks the bow lantern.
+          // A slider turns toward the empty lane while it flies. Once it has
+          // landed upright, that heading stays. It does not look at the boat.
           let yaw = item.spawnYaw;
           let lean = 0;
           if (willSlide && item.slideElapsed != null) {
+            const dir = Math.sign(LANES[item.slideLane] - LANES[item.lane]) || 1;
+            const faceTarget = dir * (Math.PI / 2) - item.faceYaw;
+            const slideYaw = item.spawnYaw + wrapAngle(faceTarget - item.spawnYaw);
             const arrived = item.slideElapsed >= SLIDE_SECONDS;
-            if (arrived && bow) {
-              const dx = bow.x - item.group.position.x;
-              const dz = bow.z - item.group.position.z;
-              if (dx * dx + dz * dz > 1e-6) yaw = Math.atan2(dx, dz) - item.faceYaw;
-            } else if (!arrived && move) {
-              const dir = Math.sign(LANES[item.slideLane] - LANES[item.lane]) || 1;
-              const faceTarget = dir * (Math.PI / 2) - item.faceYaw;
+            if (!arrived && move) {
               yaw = item.spawnYaw + wrapAngle(faceTarget - item.spawnYaw) * move.turn;
               lean = -dir * SLIDE_LEAN * move.lean;
+            } else if (arrived) {
+              yaw = slideYaw;
             }
           }
           yawQuat.setFromAxisAngle(yawAxis, yaw);
