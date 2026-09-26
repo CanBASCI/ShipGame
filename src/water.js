@@ -2,9 +2,10 @@ import * as THREE from 'three';
 
 const WATER_WIDTH = 13.2;
 const WATER_LENGTH = 240;
-// Frozen copies of the sea mesh. More sit ahead of the boat, under the moon.
-const SEA_BACK = 2;
-const SEA_AHEAD = 7;
+// One mesh, long enough for the water in view: a little behind the camera,
+// and out past the moon. It is not repeated.
+const SEA_BEHIND = 18;
+const SEA_AHEAD = 72;
 
 const MAX_LIGHTS = 40;
 
@@ -212,7 +213,6 @@ export function createWater() {
     if (!sea) return;
     mesh.geometry.dispose();
     mesh.geometry = sea.geometry;
-    mesh.userData.seaTile = sea.tile;
   }).catch((err) => {
     console.error(err);
   });
@@ -267,94 +267,26 @@ async function loadStillSea() {
   const sizeZ = maxZ - minZ;
   if (sizeX < 1e-4 || sizeZ < 1e-4) return null;
   const xScale = WATER_WIDTH / sizeX;
-  const baseX = bakedX;
-  const baseZ = bakedZ;
+  const zScale = (SEA_BEHIND + SEA_AHEAD) / sizeZ;
+  const positions = new Float32Array(vertCount * 3);
+  const normals = new Float32Array(vertCount * 3);
   for (let i = 0; i < vertCount; i += 1) {
-    baseX[i] = (baseX[i] - minX) * xScale - WATER_WIDTH / 2;
-    baseZ[i] = baseZ[i] - minZ;
-    baseY[i] -= maxY;
-  }
-  blendSeaEnds(baseX, baseY, baseZ, sizeZ);
-  const baseN = new Float32Array(vertCount * 3);
-  for (let i = 0; i < vertCount; i += 1) {
+    positions[i * 3] = (bakedX[i] - minX) * xScale - WATER_WIDTH / 2;
+    positions[i * 3 + 1] = baseY[i] - maxY;
+    positions[i * 3 + 2] = (bakedZ[i] - minZ) * zScale - SEA_BEHIND;
     v.set(srcNrm[i * 3], srcNrm[i * 3 + 1], srcNrm[i * 3 + 2]).applyMatrix3(normalMatrix);
     v.x /= xScale;
+    v.z /= zScale;
     v.normalize();
-    baseN[i * 3] = v.x;
-    baseN[i * 3 + 1] = v.y;
-    baseN[i * 3 + 2] = v.z;
-  }
-  const copies = SEA_BACK + SEA_AHEAD;
-  const indexCount = srcIndex.length;
-  const positions = new Float32Array(copies * vertCount * 3);
-  const normals = new Float32Array(positions.length);
-  const indices = new Uint32Array(copies * indexCount);
-  for (let c = 0; c < copies; c += 1) {
-    const z0 = (c - SEA_BACK) * sizeZ;
-    const base = c * vertCount;
-    for (let i = 0; i < vertCount; i += 1) {
-      const o = (base + i) * 3;
-      positions[o] = baseX[i];
-      positions[o + 1] = baseY[i];
-      positions[o + 2] = z0 + baseZ[i];
-      normals[o] = baseN[i * 3];
-      normals[o + 1] = baseN[i * 3 + 1];
-      normals[o + 2] = baseN[i * 3 + 2];
-    }
-    const at = c * indexCount;
-    for (let i = 0; i < indexCount; i += 1) indices[at + i] = srcIndex[i] + base;
+    normals[i * 3] = v.x;
+    normals[i * 3 + 1] = v.y;
+    normals[i * 3 + 2] = v.z;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-  geo.setIndex(new THREE.BufferAttribute(indices, 1));
-  return { geometry: geo, tile: sizeZ };
-}
-
-function blendSeaEnds(baseX, baseY, baseZ, sizeZ) {
-  const blend = 0.42;
-  const minEdge = edgeVerts(baseZ, baseX, 0);
-  const maxEdge = edgeVerts(baseZ, baseX, sizeZ);
-  if (minEdge.length < 2 || maxEdge.length < 2) return;
-  for (let i = 0; i < baseZ.length; i += 1) {
-    let w = 0;
-    if (baseZ[i] < blend) w = 1 - baseZ[i] / blend;
-    const fromEnd = sizeZ - baseZ[i];
-    if (fromEnd < blend) w = Math.max(w, 1 - fromEnd / blend);
-    if (w === 0) continue;
-    w = w * w * (3 - 2 * w);
-    const avg = 0.5 * (
-      sampleEdge(baseY, minEdge, baseX, baseX[i])
-      + sampleEdge(baseY, maxEdge, baseX, baseX[i])
-    );
-    baseY[i] += (avg - baseY[i]) * w;
-  }
-}
-
-function edgeVerts(baseZ, baseX, zTarget) {
-  const list = [];
-  for (let i = 0; i < baseZ.length; i += 1) {
-    if (Math.abs(baseZ[i] - zTarget) < 1e-3) list.push(i);
-  }
-  list.sort((a, b) => baseX[a] - baseX[b]);
-  return list;
-}
-
-function sampleEdge(src, edge, baseX, x) {
-  const last = edge.length - 1;
-  if (x <= baseX[edge[0]]) return src[edge[0]];
-  if (x >= baseX[edge[last]]) return src[edge[last]];
-  let lo = 0;
-  let hi = last;
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >> 1;
-    if (baseX[edge[mid]] < x) lo = mid;
-    else hi = mid;
-  }
-  const x0 = baseX[edge[lo]];
-  const x1 = baseX[edge[hi]];
-  const t = (x - x0) / (x1 - x0 || 1);
-  return src[edge[lo]] * (1 - t) + src[edge[hi]] * t;
+  geo.setIndex(new THREE.BufferAttribute(srcIndex, 1));
+  return { geometry: geo };
 }
 
 function accessorSpan(gltf, accessor) {

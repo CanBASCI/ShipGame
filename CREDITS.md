@@ -49,7 +49,7 @@ These files are stored in the repo and loaded by the scene.
 - License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
 - Source: https://sketchfab.com/3d-models/sea-part-e90b3547e64a4bbd825fd126760f1770
 - Files: `public/assets/water/sea_part/scene.gltf`, `public/assets/water/sea_part/scene.bin`
-- Use: the still canal surface, the model's base pose widened to the canal and repeated along it. Morph frames are not loaded. Crests sit on the waterline so the hull is not buried. The water keeps this model's Plane color: base about (0.00735, 0.00553, 0.01596), metal about 0.581, roughness about 0.069. Lantern reflections and the moon streak sit on that color.
+- Use: the still canal surface, one copy of the model's base pose covering the water in view. It is not repeated, and morph frames are not loaded. Crests sit on the waterline so the hull is not buried. The water keeps this model's Plane color: base about (0.00735, 0.00553, 0.01596), metal about 0.581, roughness about 0.069. Lantern reflections and the moon streak sit on that color.
 - This work is based on "Sea part" (https://sketchfab.com/3d-models/sea-part-e90b3547e64a4bbd825fd126760f1770) by Ayberk Tosunoglu (https://sketchfab.com/aybush) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
 
 ## Bamboo veneer
