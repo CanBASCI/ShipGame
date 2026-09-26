@@ -12,8 +12,6 @@ const BANK = 4.72;
 // Arcade keeps the hull inside the canal. +X is the player's left.
 // Side lanes sit in toward the water edges. The middle lane stays on center.
 const ARCADE_CRUISE = 1.15 * 6;
-// Each cyan pickup adds this much cruise. The lane slide does not use it.
-const CYAN_SPEED_STEP = 2;
 const LANE_OFFSET = 3.4;
 const LANES = [-LANE_OFFSET, 0, LANE_OFFSET];
 // Ease 4.9 is the old rate of 7 stretched from a 0.7 s settle to 1 s.
@@ -36,14 +34,7 @@ const FRAME_AHEAD = 0.22;
 const BLADE_DROP = 0.07;
 const STERN_WARM = new THREE.Color(0xffb03a);
 const STERN_LIGHT = new THREE.Color(0xffb45a);
-const STERN_MAGENTA = new THREE.Color(0xff2f86);
-const STERN_CYAN = new THREE.Color(0x3ee0ff);
-const HEAD_ORANGE = new THREE.Color(0xff7a2a);
 const HEAD_WARM = new THREE.Color(0xffe2b8);
-
-function stackBright(count) {
-  return 0.16 + 0.3 * Math.min(count, 6);
-}
 
 function tintLamp(lamp, glass, lightColor) {
   lamp.light.color.copy(lightColor);
@@ -290,7 +281,7 @@ export function createBoat() {
   }
 
   function applyStern() {
-    const show = hideOars || hullName === 'donnichols';
+    const show = !hideOars && hullName === 'donnichols';
     for (const lamp of sternLamps) {
       lamp.group.visible = show;
       lamp.light.visible = show;
@@ -373,20 +364,7 @@ export function createBoat() {
     for (const lamp of sternLamps) {
       for (const mat of lamp.glowMats) mat.emissiveIntensity = lamp.light.visible ? glow * lamp.bright : 0;
     }
-    if (input.arcade) {
-      const mag = stackBright(input.magenta || 0);
-      const cyn = stackBright(input.cyan || 0);
-      // +X is the player's left. That rear lamp is magenta; the right is cyan.
-      tintLamp(sternLamps[1], STERN_MAGENTA, STERN_MAGENTA);
-      tintLamp(sternLamps[0], STERN_CYAN, STERN_CYAN);
-      sternLamps[1].light.intensity = sternLamps[1].light.visible ? level * sternLamps[1].bright * mag : 0;
-      sternLamps[0].light.intensity = sternLamps[0].light.visible ? level * sternLamps[0].bright * cyn : 0;
-      for (const mat of sternLamps[1].glowMats) mat.emissiveIntensity = glow * sternLamps[1].bright * mag;
-      for (const mat of sternLamps[0].glowMats) mat.emissiveIntensity = glow * sternLamps[0].bright * cyn;
-      const orange = input.orange || 0;
-      headlight.color.copy(HEAD_ORANGE);
-      headlight.intensity = orange > 0 ? 42 * orange : 0;
-    } else {
+    if (!input.arcade) {
       tintLamp(sternLamps[1], STERN_WARM, STERN_LIGHT);
       tintLamp(sternLamps[0], STERN_WARM, STERN_LIGHT);
       headlight.color.copy(HEAD_WARM);
@@ -422,7 +400,7 @@ export function createBoat() {
     }
 
     const settle = 1 - Math.exp(-1.6 * dt);
-    const cruise = ARCADE_CRUISE + (input.cyan || 0) * CYAN_SPEED_STEP;
+    const cruise = ARCADE_CRUISE;
     state.speed += (cruise - state.speed) * settle;
     if (state.speed < 0) state.speed = 0;
 
@@ -649,13 +627,6 @@ export function createBoat() {
     update,
     reset,
     setHull,
-    streakAnchors(out) {
-      group.updateWorldMatrix(true, true);
-      headlight.getWorldPosition(out.orange);
-      sternLamps[1].group.localToWorld(out.magenta.copy(sternLamps[1].localPos));
-      sternLamps[0].group.localToWorld(out.cyan.copy(sternLamps[0].localPos));
-      return out;
-    },
     lanternPosition,
     lanternLights,
     lanternColor: new THREE.Color(0xffb45a),
