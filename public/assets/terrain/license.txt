@@ -1,0 +1,11 @@
+Model Information:
+* title:	Slope in the forest
+* source:	https://sketchfab.com/3d-models/slope-in-the-forest-4735b12df3104ba6905a9e5373b39ac0
+* author:	archiwum_xyz (https://sketchfab.com/archiwum_xyz)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Slope in the forest" (https://sketchfab.com/3d-models/slope-in-the-forest-4735b12df3104ba6905a9e5373b39ac0) by archiwum_xyz (https://sketchfab.com/archiwum_xyz) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
