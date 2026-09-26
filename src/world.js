@@ -83,43 +83,6 @@ export function createWorld(scene) {
     undefined,
     (err) => console.error(err),
   );
-
-  // Slope in the forest is stored in centimetres. After the glTF axis change
-  // the low edge is +Z and the long axis is X. Each bank gets one shared mesh
-  // that rides with the boat.
-  const SLOPE_SCALE = 0.01;
-  const SLOPE_STRETCH = 2.6;
-  const SLOPE_TOE = 6.715;
-  const SLOPE_INNER = 7.2;
-  const slopeBanks = [];
-  loader.load(
-    '/assets/terrain/slope.glb',
-    (gltf) => {
-      gltf.scene.traverse((obj) => {
-        if (!obj.isMesh || !obj.material) return;
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        for (const mat of mats) {
-          // Cool the unlit daylight photo so it reads in the night canal.
-          mat.color.setRGB(0.85, 0.88, 0.95);
-        }
-      });
-      const right = gltf.scene;
-      const left = gltf.scene.clone(true);
-      placeSlope(right, 1);
-      placeSlope(left, -1);
-      scene.add(right, left);
-      slopeBanks.push(right, left);
-    },
-    undefined,
-    (err) => console.error(err),
-  );
-
-  function placeSlope(root, side) {
-    root.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-    root.scale.set(SLOPE_SCALE * SLOPE_STRETCH, SLOPE_SCALE, SLOPE_SCALE);
-    root.position.set(side * (SLOPE_INNER + SLOPE_TOE), 0.22, 0);
-  }
-
   const tmp = new THREE.Color();
   const warm = new THREE.Color(0xffb36a);
   const bambooGlow = { value: 0.3 };
@@ -464,8 +427,6 @@ export function createWorld(scene) {
       light.distance = item.L.distance;
       light.intensity = item.L.intensity * THREE.MathUtils.lerp(1, 0.38, day) * bambooGlow.value * reach;
     }
-
-    for (const bank of slopeBanks) bank.position.z = boatPos.z;
 
     sky.mesh.position.copy(boatPos);
     sky.mesh.position.y = 0;
