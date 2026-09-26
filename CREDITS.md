@@ -52,6 +52,15 @@ These files are stored in the repo and loaded by the scene.
 - Use: the canal surface the boat rides on. The patch is widened to the canal and repeated along it. The crests sit on the waterline so the hull is not buried. The water keeps this model's Plane color: base about (0.00735, 0.00553, 0.01596), metal about 0.581, roughness about 0.069. Lantern reflections and the moon streak sit on that color.
 - This work is based on "Sea part" (https://sketchfab.com/3d-models/sea-part-e90b3547e64a4bbd825fd126760f1770) by Ayberk Tosunoglu (https://sketchfab.com/aybush) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
 
+## Slope in the forest
+
+- Author: archiwum_xyz (https://sketchfab.com/archiwum_xyz)
+- License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+- Source: https://sketchfab.com/3d-models/slope-in-the-forest-4735b12df3104ba6905a9e5373b39ac0
+- File: `public/assets/terrain/slope.glb`
+- Use: the forest slope on the left and right banks, beside the canal. The mesh is the 1K model. It sits outside the water, with the low edge toward the canal, and rides along with the boat.
+- This work is based on "Slope in the forest" (https://sketchfab.com/3d-models/slope-in-the-forest-4735b12df3104ba6905a9e5373b39ac0) by archiwum_xyz (https://sketchfab.com/archiwum_xyz) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
+
 ## Bamboo veneer
 
 - Author: Jenelle van Heerden
