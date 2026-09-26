@@ -110,7 +110,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.03, stick: -0.25, daughter: -0.20, blood: -0.05, stone: -0.05 };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.03, stick: -0.25, daughter: -0.20, blood: -0.05, stone: -0.05, cruise: boat.cruiseDefault };
 world.setTune(tune);
 
 function dayAmount() {
@@ -319,10 +319,11 @@ window.addEventListener('error', (event) => {
 });
 
 const TUNE_STEP = 1.1;
-const TUNE_MIN = { ghostLit: 0.05, bloodLit: 0, stick: -4, daughter: -4, blood: -4, stone: -4 };
-const TUNE_MAX = { ghostLit: 8, bloodLit: 8, stick: 4, daughter: 4, blood: 4, stone: 4 };
+const TUNE_MIN = { ghostLit: 0.05, bloodLit: 0, stick: -4, daughter: -4, blood: -4, stone: -4, cruise: 0 };
+const TUNE_MAX = { ghostLit: 8, bloodLit: 8, stick: 4, daughter: 4, blood: 4, stone: 4, cruise: 20 };
 const FINE_TUNE = new Set(['bloodLit', 'stick', 'daughter', 'blood', 'stone']);
 const FINE_STEP = 0.01;
+const TUNE_ADD = { cruise: 0.1 };
 const fogToggle = document.getElementById('fog-toggle');
 const arcadeToggle = document.getElementById('arcade-toggle');
 const bambooToggle = document.getElementById('bamboo-toggle');
@@ -349,6 +350,7 @@ function paintTune() {
 
 function applyTune() {
   world.setTune(tune);
+  boat.setCruise(tune.cruise);
   paintLights();
   paintTune();
 }
@@ -389,11 +391,16 @@ document.getElementById('tune').addEventListener('click', (event) => {
   if (!button) return;
   const key = button.dataset.tune;
   const dir = Number(button.dataset.dir) > 0 ? 1 : -1;
-  const next = FINE_TUNE.has(key)
-    ? tune[key] + dir * FINE_STEP
-    : tune[key] * (dir > 0 ? TUNE_STEP : 1 / TUNE_STEP);
+  const add = TUNE_ADD[key];
+  const next = add
+    ? tune[key] + dir * add
+    : FINE_TUNE.has(key)
+      ? tune[key] + dir * FINE_STEP
+      : tune[key] * (dir > 0 ? TUNE_STEP : 1 / TUNE_STEP);
   const clamped = Math.min(TUNE_MAX[key] ?? 4, Math.max(TUNE_MIN[key] ?? 0.25, next));
-  tune[key] = FINE_TUNE.has(key) ? Math.round(clamped * 100) / 100 : clamped;
+  if (add) tune[key] = Math.round(clamped * 10) / 10;
+  else if (FINE_TUNE.has(key)) tune[key] = Math.round(clamped * 100) / 100;
+  else tune[key] = clamped;
   applyTune();
 });
 

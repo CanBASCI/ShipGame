@@ -442,6 +442,7 @@ export function createBoat() {
   let braking = false;
   let arcadeLane = 1;
   let arcadeLaneArmed = false;
+  let arcadeCruise = ARCADE_CRUISE;
   let prevArcadeLeft = false;
   let prevArcadeRight = false;
   let arcadeAim = -1;
@@ -535,7 +536,7 @@ export function createBoat() {
     }
 
     const settle = 1 - Math.exp(-1.6 * dt);
-    const cruise = ARCADE_CRUISE;
+    const cruise = arcadeCruise;
     state.speed += (cruise - state.speed) * settle;
     if (state.speed < 0) state.speed = 0;
 
@@ -1012,6 +1013,10 @@ export function createBoat() {
       };
     },
     reset,
+    cruiseDefault: ARCADE_CRUISE,
+    setCruise(speed) {
+      if (Number.isFinite(speed)) arcadeCruise = speed;
+    },
     setHull,
     lanternPosition,
     lanternLights,
