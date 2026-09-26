@@ -433,6 +433,9 @@ window.__ship = {
     hintHidden = false;
     hint.classList.remove('hide');
   },
+  captain() {
+    return boat.captainSample();
+  },
   state() {
     const ahead = boat.group.position.clone();
     ahead.x += Math.sin(boat.state.yaw) * 6;

@@ -210,6 +210,81 @@ export function createBoat() {
 
   let hullName = 'donnichols';
   let lampModel = null;
+  // Sitting boards measured from the upward faces of each hull. The captain's
+  // hem rests on that top, centered on the board.
+  const CAPTAIN_SEATS = {
+    donnichols: { x: 0, y: 0.126, z: 0.245 },
+    mevcut: { x: 0, y: 0.293, z: -0.225 },
+  };
+  const captainRoot = new THREE.Group();
+  body.add(captainRoot);
+  let captainMixer = null;
+  let captainFit = null;
+
+  function boundsIn(ancestor, object) {
+    const box = new THREE.Box3();
+    const v = new THREE.Vector3();
+    const m = new THREE.Matrix4();
+    object.traverse((obj) => {
+      if (!obj.isMesh || !obj.geometry || !obj.geometry.attributes.position) return;
+      m.identity();
+      let cur = obj;
+      while (cur && cur !== ancestor) {
+        cur.updateMatrix();
+        m.premultiply(cur.matrix);
+        cur = cur.parent;
+      }
+      const pos = obj.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += 1) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        box.expandByPoint(v);
+      }
+    });
+    return box;
+  }
+
+  function placeCaptain() {
+    if (!captainFit) return;
+    const seat = CAPTAIN_SEATS[hullName];
+    // The export faces -Z. The bow is +Z, so turn the captain toward the bow.
+    captainRoot.rotation.y = Math.PI;
+    const scale = captainFit.scale;
+    captainRoot.scale.setScalar(scale);
+    const cx = captainFit.center.x;
+    const cz = captainFit.center.z;
+    captainRoot.position.set(
+      seat.x + cx * scale,
+      seat.y - captainFit.min.y * scale,
+      seat.z + cz * scale,
+    );
+  }
+
+  new GLTFLoader().load('/assets/boat/captain.glb', (gltf) => {
+    const model = gltf.scene;
+    model.traverse((obj) => {
+      obj.frustumCulled = false;
+    });
+    captainRoot.add(model);
+    const box = boundsIn(captainRoot, model);
+    const size = box.getSize(new THREE.Vector3());
+    // Keep the cloak inside the sitting board. The Donnichols board is the
+    // wider of the two, about 0.64 m across.
+    const scale = Math.min(1, 0.5 / Math.max(size.x, 0.001));
+    captainFit = {
+      min: box.min.clone(),
+      center: box.getCenter(new THREE.Vector3()),
+      scale,
+    };
+    if (gltf.animations.length) {
+      captainMixer = new THREE.AnimationMixer(model);
+      for (const clip of gltf.animations) {
+        const action = captainMixer.clipAction(clip);
+        action.setLoop(THREE.LoopRepeat, Infinity);
+        action.play();
+      }
+    }
+    placeCaptain();
+  });
   const lampFeet = {
     mevcut: new THREE.Vector3(0, LAMP_FOOT_Y, 1.72),
     donnichols: new THREE.Vector3(0, 0.63, 1.7),
@@ -296,6 +371,7 @@ export function createBoat() {
     applyOars();
     applyStern();
     placeLantern();
+    placeCaptain();
   }
 
   const state = {
@@ -471,6 +547,7 @@ export function createBoat() {
   }
 
   function update(dt, time, input) {
+    if (captainMixer) captainMixer.update(Math.min(0.05, Math.max(0, dt || 0)));
     hideOars = !!input.arcade;
     if (input.arcade) {
       if (input.arcadeOver) {
@@ -639,6 +716,26 @@ export function createBoat() {
     lanternLights,
     lanternColor: new THREE.Color(0xffb45a),
     headlight,
+    captainSample() {
+      if (!captainFit) return { ready: false };
+      const box = boundsIn(body, captainRoot);
+      const seat = CAPTAIN_SEATS[hullName];
+      const center = box.getCenter(new THREE.Vector3());
+      return {
+        ready: true,
+        hull: hullName,
+        minY: box.min.y,
+        maxY: box.max.y,
+        centerX: center.x,
+        centerZ: center.z,
+        seatY: seat.y,
+        seatX: seat.x,
+        seatZ: seat.z,
+        yaw: captainRoot.rotation.y,
+        scale: captainRoot.scale.x,
+        parent: captainRoot.parent === body,
+      };
+    },
     blades() {
       group.updateWorldMatrix(true, true);
       const leftPivot = hullName === 'donnichols' ? donnOarL : oarL;

@@ -57,29 +57,82 @@ const HAND_LAMP_MESH_HEIGHT = 0.29425;
 const HAND_LAMP_HANG = HAND_LAMP_MESH_HEIGHT * HAND_LAMP_SCALE;
 // Slide the cap from the palm socket toward the fingertips, still under the hand.
 const HAND_LAMP_REACH = 0.04;
-const SLIDE_LEAN = Math.PI / 4;
-const FLIGHT_ARC = 0.4;
 
-// One smooth curve over the 2 second flight. Position eases in, is fastest
-// in the middle, and eases out, with no break in the middle. The lean and
-// the hop follow the speed, so both peak while the ghost is moving fastest.
-function slideMove(elapsed) {
-  const t = Math.min(1, Math.max(0, elapsed / SLIDE_SECONDS));
-  const progress = t * t * t * (t * (t * 6 - 15) + 10);
-  const pace = 16 * t * t * (1 - t) * (1 - t);
-  return {
-    progress,
-    lean: pace,
-    arc: FLIGHT_ARC * pace,
-    turn: progress,
-    done: t >= 1,
-  };
+// Film fade over two seconds. Opacity eases between these points. The old
+// lane softens, pulses twice (the second pulse shorter), then dissolves.
+// A short gap at zero is when the ghost changes lanes. The new lane arrives
+// faint, pulses twice, then settles solid.
+const FILM = [
+  [0, 1],
+  [0.34, 0.36],
+  [0.5, 0.9],
+  [0.68, 0.16],
+  [0.78, 0.62],
+  [0.88, 0.05],
+  [1.02, 0],
+  [1.14, 0],
+  [1.32, 0.22],
+  [1.48, 0.74],
+  [1.62, 0.18],
+  [1.7, 0.5],
+  [1.78, 0.26],
+  [2, 1],
+];
+const FILM_SWITCH = 1.02;
+
+function flickerAt(elapsed) {
+  const t = Math.max(0, elapsed);
+  if (t >= SLIDE_SECONDS) return { opacity: 1, dest: true };
+  let i = 0;
+  while (i < FILM.length - 1 && t >= FILM[i + 1][0]) i += 1;
+  const a = FILM[i];
+  const b = FILM[i + 1];
+  const u = (t - a[0]) / (b[0] - a[0]);
+  const s = u * u * (3 - 2 * u);
+  return { opacity: a[1] + (b[1] - a[1]) * s, dest: t >= FILM_SWITCH };
+}
+
+function ownFadeMats(model) {
+  const mats = [];
+  model.traverse((obj) => {
+    if (!obj.isMesh || !obj.material) return;
+    if (Array.isArray(obj.material)) {
+      obj.material = obj.material.map((mat) => {
+        const next = adoptFadeMat(mat);
+        mats.push(next);
+        return next;
+      });
+      return;
+    }
+    obj.material = adoptFadeMat(obj.material);
+    mats.push(obj.material);
+  });
+  return mats;
+}
+
+function adoptFadeMat(mat) {
+  const next = mat.clone();
+  // clone() keeps the maps and drops the compiled lighting hook.
+  next.userData.bowLit = false;
+  tuneMaterial(next, true);
+  return next;
+}
+
+function paintFade(mats, opacity) {
+  if (!mats) return opacity > 0.02;
+  const solid = opacity > 0.98;
+  for (const mat of mats) {
+    const transparent = !solid;
+    if (mat.transparent !== transparent) {
+      mat.transparent = transparent;
+      mat.needsUpdate = true;
+    }
+    mat.opacity = solid ? 1 : opacity;
+    mat.depthWrite = solid || opacity > 0.2;
+  }
+  return opacity > 0.02;
 }
 const lampUp = new THREE.Vector3(0, 1, 0);
-const yawAxis = new THREE.Vector3(0, 1, 0);
-const leanAxis = new THREE.Vector3(0, 0, 1);
-const yawQuat = new THREE.Quaternion();
-const leanQuat = new THREE.Quaternion();
 const axisProbe = new THREE.Vector3();
 const palmWorld = new THREE.Vector3();
 const fingerWorld = new THREE.Vector3();
@@ -401,7 +454,10 @@ export function createObstacles(scene) {
     let red = 0;
     for (const item of alive) {
       if (item.type === 'ghost_blood') {
-        if (!item.glowLocal || red >= GHOST_LAMPS) continue;
+        // Off for the whole film blink. On before it starts, after it settles,
+        // and the whole time for a ghost that never changes lanes.
+        const flickering = item.slideElapsed != null && item.slideElapsed < SLIDE_SECONDS;
+        if (flickering || !item.glowLocal || red >= GHOST_LAMPS) continue;
         const spot = bloodLamp.uPos.value[red];
         item.group.updateWorldMatrix(true, true);
         spot.copy(item.glowLocal);
@@ -526,6 +582,8 @@ export function createObstacles(scene) {
         face: !!type.face,
         faceYaw: template.faceYaw,
         spawnYaw,
+        fadeMats: type.id === 'ghost_blood' ? ownFadeMats(model) : null,
+        fade: 1,
         worldHeight: template.worldHeight,
         worldAcross: template.worldAcross,
         type: type.id,
@@ -610,8 +668,8 @@ export function createObstacles(scene) {
           continue;
         }
         if (item.mixer) item.mixer.update(step);
-        // The clip moves bones only. Yaw stays on the parent. About half of the
-        // blood ghosts slide sideways over the last 20 m; the rest keep their lane.
+        // The clip moves bones only. Yaw stays on the parent. Chosen blood
+        // ghosts flicker into an empty lane; the rest keep theirs.
         item.model.position.set(0, item.foot, 0);
         item.model.rotation.set(0, 0, 0);
         const alongNow = item.z - boatPos.z;
@@ -623,34 +681,17 @@ export function createObstacles(scene) {
         if (item.slideElapsed != null && item.slideElapsed < SLIDE_SECONDS) {
           item.slideElapsed = Math.min(SLIDE_SECONDS, item.slideElapsed + step);
         }
-        const move = item.slideElapsed != null ? slideMove(item.slideElapsed) : null;
-        if (move && move.progress > 0) {
-          x += (LANES[item.slideLane] - x) * move.progress;
+        let opacity = 1;
+        if (willSlide && item.slideElapsed != null) {
+          const flick = flickerAt(item.slideElapsed);
+          opacity = flick.opacity;
+          if (flick.dest) x = LANES[item.slideLane];
         }
-        const hop = move ? move.arc : 0;
-        item.flightHop = hop;
-        item.group.position.set(x, waterY(x, item.z, time) + hop, item.z);
+        item.group.position.set(x, waterY(x, item.z, time), item.z);
         if (item.type === 'ghost_blood') {
-          // Stayers keep the heading they spawned with and stay upright.
-          // A slider turns toward the empty lane while it flies. Once it has
-          // landed upright, that heading stays. It does not look at the boat.
-          let yaw = item.spawnYaw;
-          let lean = 0;
-          if (willSlide && item.slideElapsed != null) {
-            const dir = Math.sign(LANES[item.slideLane] - LANES[item.lane]) || 1;
-            const faceTarget = dir * (Math.PI / 2) - item.faceYaw;
-            const slideYaw = item.spawnYaw + wrapAngle(faceTarget - item.spawnYaw);
-            const arrived = item.slideElapsed >= SLIDE_SECONDS;
-            if (!arrived && move) {
-              yaw = item.spawnYaw + wrapAngle(faceTarget - item.spawnYaw) * move.turn;
-              lean = -dir * SLIDE_LEAN * move.lean;
-            } else if (arrived) {
-              yaw = slideYaw;
-            }
-          }
-          yawQuat.setFromAxisAngle(yawAxis, yaw);
-          leanQuat.setFromAxisAngle(leanAxis, lean);
-          item.group.quaternion.copy(leanQuat).multiply(yawQuat);
+          item.fade = opacity;
+          item.group.visible = paintFade(item.fadeMats, opacity);
+          item.group.rotation.set(0, item.spawnYaw, 0);
         } else if (item.face && bow) {
           const along = item.z - boatPos.z;
           const dx = bow.x - item.group.position.x;
@@ -668,7 +709,7 @@ export function createObstacles(scene) {
           item.group.rotation.y = yaw;
         }
         if (item.lamp) seatHandLamp(item);
-        if (overlaps(boatPos, item)) hit = true;
+        if (item.group.visible && overlaps(boatPos, item)) hit = true;
       }
       publishGhostLamps();
       return hit;
@@ -743,7 +784,11 @@ export function createObstacles(scene) {
           hasLamp: !!item.lamp,
           slideLane: item.slideLane == null ? item.lane : item.slideLane,
           slideElapsed: item.slideElapsed == null ? null : item.slideElapsed,
-          hop: item.flightHop || 0,
+          shown: item.group.visible !== false,
+          opacity: item.fade == null ? 1 : item.fade,
+          matOpacity: item.fadeMats && item.fadeMats[0] ? item.fadeMats[0].opacity : 1,
+          glow: item.type === 'ghost_blood' && !(item.slideElapsed != null && item.slideElapsed < SLIDE_SECONDS),
+          shader: item.fadeMats && item.fadeMats[0] ? item.fadeMats[0].customProgramCacheKey() : '',
           tilt: (() => {
             axisProbe.set(0, 1, 0).applyQuaternion(item.group.quaternion);
             return Math.atan2(axisProbe.x, axisProbe.y);

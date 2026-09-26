@@ -27,6 +27,14 @@ These files are stored in the repo and loaded by the scene.
 - Use: the boat the game opens on (Donnichols on the tune panel). The hull and its two oars are that model, scaled to the same length as the mikeask boat with the beam narrowed so it sits on the canal the same way. The bow lantern is not part of that file.
 - This work is based on "Old Boat" (https://sketchfab.com/3d-models/old-boat-a9ce4ca0cac14f448c72bb94ad193437) by donnichols (https://sketchfab.com/donnichols) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
 
+## Captain
+
+- Author: berkayege (https://sketchfab.com/berkayege)
+- License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+- Source: https://sketchfab.com/3d-models/ghost-2a22d7b9a2bb459697a8607fe7803464
+- File: `public/assets/boat/captain.glb`
+- Use: the captain, seated on the boat's sitting bench. The model has no clip. It stays on the boat in Arcade and in normal rowing, and it is not a replacement for the hull. This work is based on "Ghost" (https://sketchfab.com/3d-models/ghost-2a22d7b9a2bb459697a8607fe7803464) by berkayege (https://sketchfab.com/berkayege) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
+
 ## Sakura tree
 
 - Author: Jagobo
@@ -112,7 +120,7 @@ These files are stored in the repo and loaded by the scene.
 - License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
 - Source: https://sketchfab.com/3d-models/ghost-4e71afbfee0047768ed0ddb3982d9887
 - Files: `public/assets/obstacles/ghost_blood/scene.gltf`, `scene.bin`, `license.txt`, and `textures/`
-- Use: an Arcade obstacle mixed with the ghost daughter and the rock. Copies stand on the water in the lanes. This model has no clip and no lantern mesh. A red light inside the cloak lights only this ghost. About half of them, chosen when they spawn, fly into an empty lane. The flight starts at 20 m and lasts 2 seconds: they turn toward that lane as they move, rise and lean head-first through the middle, land upright, and keep that heading. The rest keep the heading they spawned with. Arcade off does not show them.
+- Use: an Arcade obstacle mixed with the ghost daughter and the rock. Copies stand on the water in the lanes. This model has no clip and no lantern mesh. A red light inside the cloak lights only this ghost. About half of them, chosen when they spawn, fade into an empty lane. It starts at 20 m and lasts about 2 seconds: a soft fade, two uneven flickers that get shorter, a dissolve, a short gap, then a faint arrival and two uneven flickers in the new lane until the ghost is solid. The opacity eases. They do not fly or lean, and they keep the heading they spawned with. The rest never flicker. Arcade off does not show them.
 - This work is based on "Ghost" (https://sketchfab.com/3d-models/ghost-4e71afbfee0047768ed0ddb3982d9887) by kira.is.real (https://sketchfab.com/jadeisreal0615) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
 
 ## Rock
