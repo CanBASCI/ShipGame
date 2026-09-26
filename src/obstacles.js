@@ -101,6 +101,19 @@ function tuneMaterial(mat) {
   mat.needsUpdate = true;
 }
 
+// Heading of the face in the model's own XZ plane, measured from +Z toward +X.
+// ghost_daughter's jaw and eyes sit on +X, so this is about a right angle.
+function faceHeading(root) {
+  const head = root.getObjectByName('head_jnt_82');
+  const jaw = root.getObjectByName('jaw_jnt_85');
+  if (!head || !jaw) return Math.PI / 2;
+  const headPos = new THREE.Vector3();
+  const jawPos = new THREE.Vector3();
+  head.getWorldPosition(headPos);
+  jaw.getWorldPosition(jawPos);
+  return Math.atan2(jawPos.x - headPos.x, jawPos.z - headPos.z);
+}
+
 function tuneObject(root) {
   root.traverse((obj) => {
     if (!obj.isMesh || !obj.material) return;
@@ -131,6 +144,7 @@ export function createObstacles(scene) {
           scale: TARGET_HEIGHT / height,
           foot: box.min.y,
           clips: gltf.animations || [],
+          faceYaw: faceHeading(root),
         });
       },
       undefined,
@@ -185,6 +199,7 @@ export function createObstacles(scene) {
         z,
         foot: -template.foot * template.scale,
         face: !!type.face,
+        faceYaw: template.faceYaw,
         type: type.id,
       });
     }
@@ -242,9 +257,9 @@ export function createObstacles(scene) {
         if (item.face && bow) {
           const dx = bow.x - item.group.position.x;
           const dz = bow.z - item.group.position.z;
-          // atan2 aims the group's +Z at the lantern. This rig's face is -Z,
-          // so the extra half-turn points the face at the bow at any distance.
-          if (dx * dx + dz * dz > 1e-6) item.group.rotation.y = Math.atan2(dx, dz) + Math.PI;
+          // Full aim on this frame, including the spawn frame. The jaw faces
+          // +X, so the heading is subtracted from the lantern bearing. No blend.
+          if (dx * dx + dz * dz > 1e-6) item.group.rotation.y = Math.atan2(dx, dz) - item.faceYaw;
         }
         if (overlaps(boatPos, item)) hit = true;
       }
@@ -270,6 +285,7 @@ export function createObstacles(scene) {
         rows: list,
         clips: alive.filter((item) => item.mixer).length,
         animTime: first && first.mixer ? first.mixer.time : 0,
+        faceYaw: first ? first.faceYaw : 0,
         placed: alive.slice(0, 8).map((item) => ({
           lane: item.lane,
           x: item.group.position.x,
