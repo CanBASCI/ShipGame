@@ -11,7 +11,6 @@ const TURN_EASE = 2.1;
 const BANK = 4.72;
 // Arcade keeps the hull inside the canal. +X is the player's left.
 // Side lanes sit in toward the water edges. The middle lane stays on center.
-const ARCADE_CRUISE = 1.15 * 6;
 const LANE_OFFSET = 3.4;
 const LANES = [-LANE_OFFSET, 0, LANE_OFFSET];
 // Ease 4.9 is the old rate of 7 stretched from a 0.7 s settle to 1 s.
@@ -442,7 +441,7 @@ export function createBoat() {
   let braking = false;
   let arcadeLane = 1;
   let arcadeLaneArmed = false;
-  let arcadeCruise = ARCADE_CRUISE;
+  let arcadeCruise = 5;
   let prevArcadeLeft = false;
   let prevArcadeRight = false;
   let arcadeAim = -1;
@@ -1013,9 +1012,9 @@ export function createBoat() {
       };
     },
     reset,
-    cruiseDefault: ARCADE_CRUISE,
+    cruiseDefault: 5,
     setCruise(speed) {
-      if (Number.isFinite(speed)) arcadeCruise = speed;
+      if (Number.isFinite(speed)) arcadeCruise = Math.min(15, Math.max(0, speed));
     },
     setHull,
     lanternPosition,

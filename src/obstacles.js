@@ -438,7 +438,7 @@ export function createObstacles(scene) {
   let arcadeOn = false;
   let jumpClearance = 0;
   let jumpArmed = false;
-  let stickLift = 0;
+  let stickLift = -0.20;
   let daughterLift = 0;
   let bloodLift = 0;
   let stoneLift = 0;

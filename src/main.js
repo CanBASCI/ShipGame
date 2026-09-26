@@ -110,7 +110,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.03, stick: -0.25, daughter: -0.20, blood: -0.05, stone: -0.05, cruise: boat.cruiseDefault };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.03, stick: -0.20, daughter: -0.20, blood: -0.05, stone: -0.05, cruise: boat.cruiseDefault };
 world.setTune(tune);
 
 function dayAmount() {
@@ -320,7 +320,7 @@ window.addEventListener('error', (event) => {
 
 const TUNE_STEP = 1.1;
 const TUNE_MIN = { ghostLit: 0.05, bloodLit: 0, stick: -4, daughter: -4, blood: -4, stone: -4, cruise: 0 };
-const TUNE_MAX = { ghostLit: 8, bloodLit: 8, stick: 4, daughter: 4, blood: 4, stone: 4, cruise: 20 };
+const TUNE_MAX = { ghostLit: 8, bloodLit: 8, stick: 4, daughter: 4, blood: 4, stone: 4, cruise: 15 };
 const FINE_TUNE = new Set(['bloodLit', 'stick', 'daughter', 'blood', 'stone']);
 const FINE_STEP = 0.01;
 const TUNE_ADD = { cruise: 0.1 };
