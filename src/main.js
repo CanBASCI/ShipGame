@@ -110,7 +110,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.03, stick: -0.15, daughter: -0.20, blood: -0.05, stone: 0 };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.03, stick: -0.15, daughter: -0.20, blood: -0.05, stone: -0.05 };
 world.setTune(tune);
 
 function dayAmount() {
