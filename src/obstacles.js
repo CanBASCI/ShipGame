@@ -21,9 +21,9 @@ const HIT_BEHIND = 1.25;
 const LOOK_FROM = 20;
 const LOOK_DONE = 8;
 // Same lantern mesh as the boat. It hangs under the ghost's hand.
-// Darkest red already in the right-bank lantern set (RIGHT_COLORS).
+// Normal-mode bamboo orange from LANTERN_PALETTE.
 const HAND_LAMP_SCALE = 0.85;
-const HAND_LAMP_COLOR = 0xff3d6e;
+const HAND_LAMP_COLOR = 0xff7a2a;
 // Opening glass strength, and how strongly that lamp lights the ghost.
 const HAND_LAMP_EMISSIVE = 4;
 const HAND_LAMP_BODY = 0.2;
