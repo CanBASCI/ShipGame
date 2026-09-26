@@ -110,7 +110,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 1.3, ghostLit: 4 };
 world.setTune(tune);
 
 function dayAmount() {
@@ -190,6 +190,7 @@ function updateCamera(dt, jump) {
 }
 
 function update(dt) {
+  if (paused) return;
   const day = dayAmount();
   time += dt;
   boat.update(dt, time, inputState(day));
@@ -284,18 +285,17 @@ composer.render();
 
 let last = performance.now();
 let frames = 0;
+let frameHandle = 0;
 
 function frame(now) {
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
   last = now;
-  if (!paused) {
-    update(dt);
-    composer.render();
-  }
+  if (!paused) update(dt);
+  composer.render();
   frames += 1;
   if (frames > 8) window.__ship.ready = true;
   paintTune();
-  requestAnimationFrame(frame);
+  frameHandle = requestAnimationFrame(frame);
 }
 
 const errors = [];
@@ -309,12 +309,20 @@ window.addEventListener('error', (event) => {
 });
 
 const TUNE_STEP = 1.1;
+const TUNE_MAX = { ghostLit: 8 };
 const fogToggle = document.getElementById('fog-toggle');
 const arcadeToggle = document.getElementById('arcade-toggle');
 const bambooToggle = document.getElementById('bamboo-toggle');
 const boatSwitch = document.getElementById('boat-switch');
 const daySlider = document.getElementById('day-slider');
 const dayVal = document.getElementById('day-val');
+const pauseButton = document.getElementById('pause-toggle');
+
+function setPaused(value) {
+  paused = !!value;
+  pauseButton.textContent = paused ? 'Devam' : 'Duraklat';
+  pauseButton.setAttribute('aria-pressed', String(paused));
+}
 
 function paintTune() {
   for (const el of document.querySelectorAll('.tune-val')) {
@@ -366,7 +374,7 @@ document.getElementById('tune').addEventListener('click', (event) => {
   if (!button) return;
   const key = button.dataset.tune;
   const next = tune[key] * (Number(button.dataset.dir) > 0 ? TUNE_STEP : 1 / TUNE_STEP);
-  tune[key] = Math.min(4, Math.max(0.25, next));
+  tune[key] = Math.min(TUNE_MAX[key] ?? 4, Math.max(0.25, next));
   applyTune();
 });
 
@@ -378,11 +386,15 @@ function holdDayFromSlider() {
 daySlider.addEventListener('input', holdDayFromSlider);
 daySlider.addEventListener('change', holdDayFromSlider);
 
+pauseButton.addEventListener('click', () => {
+  setPaused(!paused);
+});
+
 window.__ship = {
   ready: false,
   errors,
   pause(value) {
-    paused = value;
+    setPaused(value);
   },
   step(dt) {
     const started = performance.now();
@@ -429,6 +441,7 @@ window.__ship = {
       day: dayAmount(),
       dayHeld: dayHold != null,
       tune: { ...tune },
+      paused,
       time,
       hintHidden,
       bowX: ahead.x,
@@ -456,5 +469,6 @@ window.__ship = {
 };
 
 const manual = new URLSearchParams(location.search).has('manual');
+if (import.meta.hot) import.meta.hot.dispose(() => cancelAnimationFrame(frameHandle));
 if (manual) window.__ship.ready = true;
-else requestAnimationFrame(frame);
+else frameHandle = requestAnimationFrame(frame);

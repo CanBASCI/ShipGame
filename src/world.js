@@ -554,6 +554,7 @@ export function createWorld(scene) {
       bambooReflect.value = next.water;
       treeLight.value = next.tree;
       mist.uniforms.uFogOn.value = next.fog ? 1 : 0;
+      obstacles.setHandTune(next.lampPower, next.ghostLit);
     },
     setArcade,
     takeObstacleHit() {

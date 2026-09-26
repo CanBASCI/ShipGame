@@ -24,18 +24,27 @@ const LOOK_DONE = 8;
 // Darkest red already in the right-bank lantern set (RIGHT_COLORS).
 const HAND_LAMP_SCALE = 0.85;
 const HAND_LAMP_COLOR = 0xff3d6e;
-// Half the first glow. Glass and the short point light share the cut.
+// Half the first glow. The glass strength and the ghost-body light are separate.
 const HAND_LAMP_EMISSIVE = 1.3;
-const HAND_LAMP_INTENSITY = 4;
-// The hand lamp shares this layer with the ghost only, so it does not
-// light the river, the trees, or the leaves.
-const GHOST_LAMP_LAYER = 1;
+const HAND_LAMP_BODY = 4;
+const GHOST_LAMPS = 16;
+const ghostLamp = {
+  uPos: { value: Array.from({ length: GHOST_LAMPS }, () => new THREE.Vector3(0, -40, 0)) },
+  uCount: { value: 0 },
+  uColor: { value: new THREE.Color(HAND_LAMP_COLOR) },
+  uStrength: { value: HAND_LAMP_BODY },
+};
+let handPower = HAND_LAMP_EMISSIVE;
 // Lantern_01 stands on its foot. Drop the foot by this so the cap meets the
 // hand and the body hangs below it, instead of rising off the knuckles.
 const HAND_LAMP_MESH_HEIGHT = 0.29425;
 const HAND_LAMP_HANG = HAND_LAMP_MESH_HEIGHT * HAND_LAMP_SCALE;
+// Slide the cap from the palm socket toward the fingertips, still under the hand.
+const HAND_LAMP_REACH = 0.04;
 const lampUp = new THREE.Vector3(0, 1, 0);
 const palmWorld = new THREE.Vector3();
+const fingerWorld = new THREE.Vector3();
+const fingerStep = new THREE.Vector3();
 const bonePos = new THREE.Vector3();
 const parentQuat = new THREE.Quaternion();
 const uprightQuat = new THREE.Quaternion();
@@ -101,6 +110,10 @@ function tuneMaterial(mat) {
     shader.uniforms.uHeadDir = beam.uHeadDir;
     shader.uniforms.uHead = beam.uHead;
     shader.uniforms.uHeadSpread = beam.uHeadSpread;
+    shader.uniforms.uGhostLampPos = ghostLamp.uPos;
+    shader.uniforms.uGhostLampN = ghostLamp.uCount;
+    shader.uniforms.uGhostLampColor = ghostLamp.uColor;
+    shader.uniforms.uGhostLamp = ghostLamp.uStrength;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vBowWorld;')
       .replace(
@@ -116,6 +129,10 @@ function tuneMaterial(mat) {
         uniform vec3 uHeadDir;
         uniform float uHead;
         uniform float uHeadSpread;
+        uniform vec3 uGhostLampPos[${GHOST_LAMPS}];
+        uniform float uGhostLampN;
+        uniform vec3 uGhostLampColor;
+        uniform float uGhostLamp;
         varying vec3 vBowWorld;`,
       )
       .replace(
@@ -128,10 +145,19 @@ function tuneMaterial(mat) {
         headCone *= step(0.0, headAhead);
         float headFall = 1.0 / (1.0 + headAhead * headAhead * 0.0032);
         outgoingLight += diffuseColor.rgb * vec3(1.0, 0.82, 0.55) * headCone * headFall * uHead * 2.6;
+        for (int i = 0; i < ${GHOST_LAMPS}; i++) {
+          float live = step(float(i) + 0.5, uGhostLampN);
+          vec3 toLamp = vBowWorld - uGhostLampPos[i];
+          float distL = length(toLamp);
+          float windowL = clamp(1.0 - distL * 0.59, 0.0, 1.0);
+          windowL *= windowL;
+          float attL = windowL / max(distL * distL, 0.045);
+          outgoingLight += diffuseColor.rgb * uGhostLampColor * attL * uGhostLamp * live;
+        }
         #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => 'obstacle-bow-beam';
+  mat.customProgramCacheKey = () => 'obstacle-bow-beam-ghostlamp';
   mat.needsUpdate = true;
 }
 
@@ -157,12 +183,8 @@ function tuneObject(root) {
 }
 
 function lampTint(item) {
-  const tint = { light: 0, glass: 0, intensity: 0, emissive: 0 };
+  const tint = { light: HAND_LAMP_COLOR, glass: 0, intensity: ghostLamp.uStrength.value, emissive: 0 };
   if (!item || !item.lamp) return tint;
-  if (item.lampLight) {
-    tint.light = item.lampLight.color.getHex();
-    tint.intensity = item.lampLight.intensity;
-  }
   item.lamp.traverse((obj) => {
     if (!obj.isMesh || !obj.material || Array.isArray(obj.material)) return;
     const glass = obj.name === 'Lantern_01_glass' || obj.material.name === 'Lantern_01_glass';
@@ -181,6 +203,16 @@ function seatHandLamp(item) {
   if (!parent) return;
   parent.updateWorldMatrix(true, false);
   parent.getWorldPosition(palmWorld);
+  const tip = item.finger;
+  if (tip) {
+    tip.updateWorldMatrix(true, false);
+    tip.getWorldPosition(fingerWorld);
+    fingerStep.subVectors(fingerWorld, palmWorld);
+    fingerStep.y = 0;
+    const reach = fingerStep.length();
+    item.lampReach = reach > 1e-4 ? Math.min(HAND_LAMP_REACH, reach) : 0;
+    if (item.lampReach > 0) palmWorld.addScaledVector(fingerStep, item.lampReach / reach);
+  }
   palmWorld.y -= HAND_LAMP_HANG;
   parent.worldToLocal(palmWorld);
   item.lamp.position.copy(palmWorld);
@@ -212,7 +244,7 @@ function tintHandLamp(root) {
     obj.material = obj.material.clone();
     obj.material.color = new THREE.Color(HAND_LAMP_COLOR);
     obj.material.emissive = new THREE.Color(HAND_LAMP_COLOR);
-    obj.material.emissiveIntensity = HAND_LAMP_EMISSIVE;
+    obj.material.emissiveIntensity = handPower;
     obj.material.depthWrite = true;
   });
 }
@@ -236,19 +268,37 @@ export function createObstacles(scene) {
     hand.getWorldScale(handScale);
     const holder = new THREE.Group();
     holder.add(handLamp.clone(true));
-    const light = new THREE.PointLight(HAND_LAMP_COLOR, HAND_LAMP_INTENSITY, 3.2, 2);
-    light.position.set(0, 0.0955, 0);
-    light.layers.set(GHOST_LAMP_LAYER);
-    holder.add(light);
     holder.scale.setScalar(HAND_LAMP_SCALE / Math.max(Math.abs(handScale.x), 1e-4));
     hand.add(holder);
-    item.model.traverse((obj) => {
-      if (obj.isMesh) obj.layers.enable(GHOST_LAMP_LAYER);
-    });
     item.lamp = holder;
-    item.lampLight = light;
+    item.finger = item.model.getObjectByName('r_arm_fingerMiddleD_jnt_28')
+      || item.model.getObjectByName('r_arm_fingerIndexD_jnt_24');
     item.lampWorld = holder.scale.x * Math.abs(handScale.x);
     seatHandLamp(item);
+  }
+
+  function publishGhostLamps() {
+    let n = 0;
+    for (const item of alive) {
+      if (!item.lamp || n >= GHOST_LAMPS) continue;
+      item.lamp.updateWorldMatrix(true, true);
+      const spot = ghostLamp.uPos.value[n];
+      item.lamp.getWorldPosition(spot);
+      spot.y += 0.081;
+      n += 1;
+    }
+    ghostLamp.uCount.value = n;
+  }
+
+  function setHandTune(power, strength) {
+    handPower = Number.isFinite(power) ? power : handPower;
+    ghostLamp.uStrength.value = Number.isFinite(strength) ? strength : ghostLamp.uStrength.value;
+    if (!handLamp) return;
+    handLamp.traverse((obj) => {
+      if (!obj.isMesh || !obj.material || Array.isArray(obj.material)) return;
+      const glass = obj.name === 'Lantern_01_glass' || obj.material.name === 'Lantern_01_glass';
+      if (glass) obj.material.emissiveIntensity = handPower;
+    });
   }
 
   loader.load('/assets/lantern/Lantern_01_1k.gltf', (gltf) => {
@@ -374,6 +424,7 @@ export function createObstacles(scene) {
     update(boatPos, time, dt, bow) {
       if (!arcadeOn) {
         if (alive.length) clear();
+        ghostLamp.uCount.value = 0;
         return false;
       }
       fill(boatPos.z);
@@ -410,8 +461,10 @@ export function createObstacles(scene) {
         if (item.lamp) seatHandLamp(item);
         if (overlaps(boatPos, item)) hit = true;
       }
+      publishGhostLamps();
       return hit;
     },
+    setHandTune,
     sample() {
       const rows = new Map();
       for (const item of alive) {
@@ -427,7 +480,6 @@ export function createObstacles(scene) {
       }
       const first = alive[0];
       const tint = lampTint(alive.find((item) => item.lamp));
-      const lit = alive.find((item) => item.lampLight);
       return {
         count: alive.length,
         packed,
@@ -443,9 +495,10 @@ export function createObstacles(scene) {
         lampGlass: tint.glass,
         lampIntensity: tint.intensity,
         lampEmissive: tint.emissive,
-        lampLayer: lit ? lit.lampLight.layers.mask : 0,
+        ghostLamps: ghostLamp.uCount.value,
         lampUpY: alive.reduce((min, item) => (item.lamp ? Math.min(min, lampUpY(item)) : min), 1),
         lampHang: alive.reduce((min, item) => (item.lamp ? Math.min(min, lampHang(item)) : min), 1),
+        lampReach: alive.reduce((max, item) => (item.lamp ? Math.max(max, item.lampReach || 0) : max), 0),
         placed: alive.map((item) => ({
           lane: item.lane,
           x: item.group.position.x,
