@@ -110,7 +110,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 1.3, ghostLit: 4 };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2 };
 world.setTune(tune);
 
 function dayAmount() {
@@ -309,6 +309,7 @@ window.addEventListener('error', (event) => {
 });
 
 const TUNE_STEP = 1.1;
+const TUNE_MIN = { ghostLit: 0.05 };
 const TUNE_MAX = { ghostLit: 8 };
 const fogToggle = document.getElementById('fog-toggle');
 const arcadeToggle = document.getElementById('arcade-toggle');
@@ -374,7 +375,7 @@ document.getElementById('tune').addEventListener('click', (event) => {
   if (!button) return;
   const key = button.dataset.tune;
   const next = tune[key] * (Number(button.dataset.dir) > 0 ? TUNE_STEP : 1 / TUNE_STEP);
-  tune[key] = Math.min(TUNE_MAX[key] ?? 4, Math.max(0.25, next));
+  tune[key] = Math.min(TUNE_MAX[key] ?? 4, Math.max(TUNE_MIN[key] ?? 0.25, next));
   applyTune();
 });
 

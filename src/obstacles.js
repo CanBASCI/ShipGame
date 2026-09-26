@@ -24,9 +24,9 @@ const LOOK_DONE = 8;
 // Darkest red already in the right-bank lantern set (RIGHT_COLORS).
 const HAND_LAMP_SCALE = 0.85;
 const HAND_LAMP_COLOR = 0xff3d6e;
-// Half the first glow. The glass strength and the ghost-body light are separate.
-const HAND_LAMP_EMISSIVE = 1.3;
-const HAND_LAMP_BODY = 4;
+// Opening glass strength, and how strongly that lamp lights the ghost.
+const HAND_LAMP_EMISSIVE = 4;
+const HAND_LAMP_BODY = 0.2;
 const GHOST_LAMPS = 16;
 const ghostLamp = {
   uPos: { value: Array.from({ length: GHOST_LAMPS }, () => new THREE.Vector3(0, -40, 0)) },
