@@ -579,6 +579,7 @@ export function createWorld(scene) {
       mist.uniforms.uFogOn.value = next.fog ? 1 : 0;
       obstacles.setHandTune(next.lampPower, next.ghostLit, next.bloodLit);
       obstacles.setHeights(next.stick, next.daughter, next.blood, next.stone);
+      obstacles.setSlideCruise(next.cruise);
     },
     setArcade,
     whiteBambooAhead,

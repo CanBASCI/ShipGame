@@ -46,10 +46,11 @@ const bloodLamp = {
   uStrength: { value: BLOOD_LAMP_BODY },
 };
 let handPower = HAND_LAMP_EMISSIVE;
-// The slide is triggered at 20 m, then plays out in two seconds. It does not
-// stretch across the whole approach. Arcade cruise is 6.9 m/s, so the ghost
-// is still ahead of the boat when the lane change finishes.
+// The slide is triggered at 20 m when Arcade cruise is 6.9 m/s, then plays
+// out in two seconds. Faster cruise starts that same flicker farther ahead,
+// slower cruise starts it closer, so it still finishes before the boat arrives.
 const SLIDE_FROM = 20;
+const SLIDE_CRUISE = 1.15 * 6;
 const SLIDE_SECONDS = 2;
 // Lantern_01 stands on its foot. Drop the foot by this so the cap meets the
 // hand and the body hangs below it, instead of rising off the knuckles.
@@ -442,6 +443,7 @@ export function createObstacles(scene) {
   let bloodLift = 0;
   let stoneLift = 0;
   let posedTime = 0;
+  let slideCruise = SLIDE_CRUISE;
   let nextZ = null;
   let rng = Math.random;
 
@@ -574,6 +576,14 @@ export function createObstacles(scene) {
       item.group.position.y = seatY(item, x, posedTime);
     }
     publishGhostLamps();
+  }
+
+  function setSlideCruise(speed) {
+    if (Number.isFinite(speed)) slideCruise = Math.max(0, speed);
+  }
+
+  function slideFrom() {
+    return SLIDE_FROM * (slideCruise / SLIDE_CRUISE);
   }
 
   loader.load('/assets/lantern/Lantern_01_1k.gltf', (gltf) => {
@@ -858,7 +868,7 @@ export function createObstacles(scene) {
         const willSlide = item.type === 'ghost_blood'
           && item.slideLane != null
           && item.slideLane !== item.lane;
-        if (willSlide && alongNow < SLIDE_FROM && item.slideElapsed == null) item.slideElapsed = 0;
+        if (willSlide && alongNow < slideFrom() && item.slideElapsed == null) item.slideElapsed = 0;
         if (item.slideElapsed != null && item.slideElapsed < SLIDE_SECONDS) {
           item.slideElapsed = Math.min(SLIDE_SECONDS, item.slideElapsed + step);
         }
@@ -904,6 +914,7 @@ export function createObstacles(scene) {
     },
     setHandTune,
     setHeights,
+    setSlideCruise,
     sample() {
       const rows = new Map();
       for (const item of alive) {
