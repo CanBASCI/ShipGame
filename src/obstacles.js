@@ -24,8 +24,8 @@ const LOOK_DONE = 8;
 // Normal-mode bamboo orange from LANTERN_PALETTE.
 const HAND_LAMP_SCALE = 0.85;
 const HAND_LAMP_COLOR = 0xff7a2a;
-// Arcade bamboo white. Blood has no lantern mesh; this only tints the ghost.
-const BLOOD_LAMP_COLOR = 0xf4f0ff;
+// The red the daughter lantern used before it turned orange. Blood has no mesh.
+const BLOOD_LAMP_COLOR = 0xff3d6e;
 // Opening glass strength, and how strongly that lamp lights the ghost.
 const HAND_LAMP_EMISSIVE = 4;
 const HAND_LAMP_BODY = 0.2;
