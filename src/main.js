@@ -119,8 +119,10 @@ function dayAmount() {
 
 function inputState(day) {
   return {
-    forward: keys.has('KeyW') || keys.has('ArrowUp'),
+    forward: keys.has('KeyW'),
     brake: keys.has('KeyS') || keys.has('ArrowDown'),
+    jump: tune.arcade && keys.has('ArrowUp'),
+    jumpReach: tune.arcade ? world.logJumpReach(boat.group.position) : 0,
     turnLeft: keys.has('KeyA') || keys.has('ArrowLeft'),
     turnRight: keys.has('KeyD') || keys.has('ArrowRight'),
     day,
@@ -194,6 +196,7 @@ function update(dt) {
   const day = dayAmount();
   time += dt;
   boat.update(dt, time, inputState(day));
+  world.setObstacleJump(tune.arcade ? boat.jumpLift() : 0, tune.arcade && boat.jumpArmed());
   if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
   bowHold.copy(boat.lanternPosition());
@@ -471,6 +474,10 @@ window.__ship = {
       yaw: boat.state.yaw,
       yawRate: boat.state.yawRate,
       speed: boat.state.speed,
+      jump: boat.jumpLift(),
+      wings: boat.wingDeploy(),
+      wingsLoaded: boat.wingsLoaded(),
+      wingSample: boat.wingSample(),
       day: dayAmount(),
       dayHeld: dayHold != null,
       tune: { ...tune },

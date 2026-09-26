@@ -147,8 +147,20 @@ const TYPES = [
   { id: 'ghost_daughter', url: '/assets/obstacles/ghost_daughter/scene.gltf', face: true },
   { id: 'ghost_blood', url: '/assets/obstacles/ghost_blood/scene.gltf', face: false },
   // fitAcross is the widest horizontal side, so the rock stays in one lane.
-  { id: 'rock', url: '/assets/obstacles/rock/scene.gltf', face: false, fitAcross: 1.8 },
+  // 2.25 is 125% of the previous 1.8 fit. Ghosts and the log are unchanged.
+  { id: 'rock', url: '/assets/obstacles/rock/scene.gltf', face: false, fitAcross: 2.25 },
+  // One log across every lane. 8.0325 is 5% over the 7.65 fit, which was already
+  // 75% of the first oversized size. Bark stays intact, a little water remains
+  // at each bank, and the three lanes are still covered.
+  { id: 'tree_debris_01', url: '/assets/obstacles/tree_debris_01/tree_debris_01.glb', face: false, fitAcross: 8.0325, span: true },
 ];
+// ArrowUp within this gap in front of the log commits the flight across it.
+const LOG_JUMP_GAP = 2;
+// Roll about the length (X). The face that pointed along the river, toward the
+// boat, becomes the top. Cut ends stay on the left and right.
+const LOG_ROLL = Math.PI / 2;
+// About one row in six is a log, and that row has nothing else.
+const LOG_ROW = 0.16;
 
 // Shared bow-flashlight term. The real SpotLight is too weak at approach
 // range under physical decay, and these materials arrive fully metallic,
@@ -184,7 +196,8 @@ function chooseLanes(rng) {
 }
 
 function pickType(rng) {
-  return TYPES[Math.floor(rng() * TYPES.length)];
+  const pool = TYPES.filter((type) => !type.span);
+  return pool[Math.floor(rng() * pool.length)];
 }
 
 function tuneMaterial(mat, blood) {
@@ -388,6 +401,8 @@ export function createObstacles(scene) {
   const handScale = new THREE.Vector3();
   let handLamp = null;
   let arcadeOn = false;
+  let jumpClearance = 0;
+  let jumpArmed = false;
   let nextZ = null;
   let rng = Math.random;
 
@@ -514,14 +529,19 @@ export function createObstacles(scene) {
         const across = Math.max(size.x, size.z, 0.001);
         tuneObject(root, type.id === 'ghost_blood');
         const scale = type.fitAcross ? type.fitAcross / across : TARGET_HEIGHT / height;
+        const center = box.getCenter(new THREE.Vector3());
         templates.set(type.id, {
           scene: root,
           scale,
           foot: box.min.y,
+          centerX: center.x,
+          centerZ: center.z,
+          alignYaw: size.z > size.x ? Math.PI / 2 : 0,
           clips: gltf.animations || [],
           faceYaw: faceHeading(root),
           worldHeight: height * scale,
           worldAcross: across * scale,
+          worldDepth: Math.min(size.x, size.z) * scale,
         });
       },
       undefined,
@@ -543,7 +563,56 @@ export function createObstacles(scene) {
     nextZ = null;
   }
 
+  function spawnSpan(z, type) {
+    const template = templates.get(type.id);
+    if (!template) return false;
+    const group = new THREE.Group();
+    const model = cloneSkeleton(template.scene);
+    model.scale.setScalar(template.scale);
+    model.rotation.set(LOG_ROLL, 0, 0);
+    model.position.set(0, 0, 0);
+    model.traverse((obj) => {
+      obj.frustumCulled = false;
+    });
+    group.add(model);
+    group.updateMatrixWorld(true);
+    const rolled = new THREE.Box3().setFromObject(model);
+    const rolledCenter = rolled.getCenter(new THREE.Vector3());
+    const rolledSize = rolled.getSize(new THREE.Vector3());
+    // Seat the new bottom on y=0 and keep the length centered across the lanes.
+    model.position.set(-rolledCenter.x, -rolled.min.y, -rolledCenter.z);
+    group.position.set(0, 0, z);
+    group.rotation.y = template.alignYaw;
+    scene.add(group);
+    alive.push({
+      group,
+      model,
+      mixer: null,
+      lane: 1,
+      z,
+      foot: -rolled.min.y,
+      centerX: -rolledCenter.x,
+      centerZ: -rolledCenter.z,
+      rollX: LOG_ROLL,
+      alignYaw: template.alignYaw,
+      face: false,
+      faceYaw: 0,
+      spawnYaw: template.alignYaw,
+      fadeMats: null,
+      fade: 1,
+      worldHeight: rolledSize.y,
+      worldAcross: rolledSize.x,
+      worldDepth: rolledSize.z,
+      type: type.id,
+      span: true,
+      lamp: null,
+    });
+    return true;
+  }
+
   function spawnRow(z) {
+    const log = TYPES.find((type) => type.span);
+    if (log && rng() < LOG_ROW) return spawnSpan(z, log);
     const lanes = chooseLanes(rng);
     const made = [];
     let spawned = 0;
@@ -633,10 +702,36 @@ export function createObstacles(scene) {
     }
   }
 
-  function overlaps(boatPos, item) {
-    const dx = Math.abs(boatPos.x - item.group.position.x);
+  // Distance from the bow to the near face of the log. Negative once the bow has reached it.
+  function logGap(boatPos, item) {
     const dz = item.z - boatPos.z;
-    return dx < HIT_X && dz < HIT_AHEAD && dz > -HIT_BEHIND;
+    return dz - HIT_AHEAD - item.worldDepth * 0.5;
+  }
+
+  // Meters the boat still has to travel to set down past a log inside the jump
+  // window. Zero when the nearest log is farther than that window.
+  function logJumpReach(boatPos) {
+    let reach = 0;
+    for (const item of alive) {
+      if (!item.span) continue;
+      const dz = item.z - boatPos.z;
+      if (dz <= -HIT_BEHIND) continue;
+      if (logGap(boatPos, item) > LOG_JUMP_GAP) continue;
+      const travel = dz + HIT_BEHIND + 0.75;
+      if (travel > reach) reach = travel;
+    }
+    return reach;
+  }
+
+  function overlaps(boatPos, item) {
+    const dz = item.z - boatPos.z;
+    if (!(dz < HIT_AHEAD && dz > -HIT_BEHIND)) return false;
+    if (item.span) {
+      if (item.cleared) return false;
+      return jumpClearance <= item.worldHeight + 0.06;
+    }
+    const dx = Math.abs(boatPos.x - item.group.position.x);
+    return dx < HIT_X;
   }
 
   return {
@@ -644,6 +739,11 @@ export function createObstacles(scene) {
       arcadeOn = !!on;
       clear();
     },
+    setJump(height, armed) {
+      jumpClearance = Math.max(0, height || 0);
+      jumpArmed = !!armed;
+    },
+    logJumpReach,
     setBeam(pos, dir, amount, spread) {
       beam.uHeadPos.value.copy(pos);
       beam.uHeadDir.value.copy(dir);
@@ -670,8 +770,13 @@ export function createObstacles(scene) {
         if (item.mixer) item.mixer.update(step);
         // The clip moves bones only. Yaw stays on the parent. Chosen blood
         // ghosts flicker into an empty lane; the rest keep theirs.
-        item.model.position.set(0, item.foot, 0);
-        item.model.rotation.set(0, 0, 0);
+        if (item.span) {
+          item.model.position.set(item.centerX, item.foot, item.centerZ);
+          item.model.rotation.set(item.rollX || 0, 0, 0);
+        } else {
+          item.model.position.set(0, item.foot, 0);
+          item.model.rotation.set(0, 0, 0);
+        }
         const alongNow = item.z - boatPos.z;
         let x = LANES[item.lane];
         const willSlide = item.type === 'ghost_blood'
@@ -687,7 +792,14 @@ export function createObstacles(scene) {
           opacity = flick.opacity;
           if (flick.dest) x = LANES[item.slideLane];
         }
-        item.group.position.set(x, waterY(x, item.z, time), item.z);
+        if (item.span) {
+          // The visible river crests at y=0. The sine offset sits above that surface.
+          item.group.position.set(0, 0, item.z);
+          item.group.rotation.set(0, item.alignYaw, 0);
+          if (jumpArmed && logGap(boatPos, item) <= LOG_JUMP_GAP && item.z - boatPos.z > -HIT_BEHIND) {
+            item.cleared = true;
+          }
+        } else item.group.position.set(x, waterY(x, item.z, time), item.z);
         if (item.type === 'ghost_blood') {
           item.fade = opacity;
           item.group.visible = paintFade(item.fadeMats, opacity);
@@ -798,9 +910,12 @@ export function createObstacles(scene) {
             return Math.atan2(axisProbe.x, axisProbe.z);
           })(),
           type: item.type,
+          span: !!item.span,
           clip: !!item.mixer,
+          y: item.group.position.y,
           worldHeight: item.worldHeight,
           worldAcross: item.worldAcross,
+          worldDepth: item.worldDepth,
         })),
       };
     },

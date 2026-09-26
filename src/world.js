@@ -587,6 +587,12 @@ export function createWorld(scene) {
     setObstacleBeam(pos, dir, amount, spread) {
       obstacles.setBeam(pos, dir, amount, spread);
     },
+    setObstacleJump(height, armed) {
+      obstacles.setJump(height, armed);
+    },
+    logJumpReach(boatPos) {
+      return obstacles.logJumpReach(boatPos);
+    },
     obstacleSample() {
       return obstacles.sample();
     },

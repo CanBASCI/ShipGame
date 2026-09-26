@@ -19,6 +19,24 @@ const LANES = [-LANE_OFFSET, 0, LANE_OFFSET];
 const LANE_EASE = 4.9;
 const ARCADE_YAW_PEAK = 0.36;
 const ARCADE_HEEL = 0.3;
+// Arcade flight over a log. The boat lifts, glides, then lands. Not a hop.
+const JUMP_RISE = 0.18;
+const JUMP_HOLD = 0.42;
+const JUMP_FALL = 0.22;
+const JUMP_HEIGHT = 1.55;
+const WING_URLS = [
+  '/assets/boat/angel_wings/scene.gltf',
+  '/assets/boat/angel_wings/scene.glb',
+  '/assets/boat/angel_wings/angel_wings.gltf',
+  '/assets/boat/angel_wings/angel_wings.glb',
+];
+const WING_DIFFUSE = '/assets/boat/angel_wings/textures/head_diff_000_a_whi.001_baseColor.png';
+const WING_SPECULAR = '/assets/boat/angel_wings/textures/head_diff_000_a_whi.001_specularf0.png';
+// Donnichols oarlocks sit on the gunwale. Each wing leaves from that side.
+const WING_GUNWALE_X = 0.57;
+const WING_GUNWALE_Y = 0.5;
+// Bow edge sits 20% of the chord above the stern edge, so the top reads from behind.
+const WING_NOSE = Math.atan(0.2);
 // The canal is a straight run on +Z, so downstream is world yaw 0.
 // A bend would return that stretch's heading instead of this constant.
 const DOWNSTREAM_YAW = 0;
@@ -125,6 +143,14 @@ export function createBoat() {
   const body = new THREE.Group();
   body.position.z = FRAME_AHEAD;
   group.add(body);
+  // Wings stay tucked until a flight. The model is optional; the glide does not wait for it.
+  const wingRoot = new THREE.Group();
+  wingRoot.visible = false;
+  body.add(wingRoot);
+  const wingPivots = [];
+  let wingLoaded = false;
+  let wingLoading = false;
+  let wingFit = null;
   const mevcutHull = new THREE.Group();
   mevcutHull.visible = false;
   body.add(mevcutHull);
@@ -422,6 +448,14 @@ export function createBoat() {
   let arcadeFrom = 0;
   let arcadeTo = 0;
   let arcadeHeel = 0;
+  let jumpT = -1;
+  let jumpGlide = JUMP_HOLD;
+  let prevJump = false;
+  let jumpArmed = false;
+
+  function flightSpan() {
+    return JUMP_RISE + jumpGlide + JUMP_FALL;
+  }
 
   function nearestArcadeLane(x) {
     let best = 1;
@@ -524,8 +558,214 @@ export function createBoat() {
     state.yaw += (yawTarget - state.yaw) * pose;
     arcadeHeel += (heelTarget - arcadeHeel) * pose;
     state.yawRate = 0;
+    const jumping = jumpT >= 0 && jumpT < flightSpan();
+    jumpArmed = false;
+    // ArrowUp always starts a flight in Arcade. A log inside 2 m stretches
+    // that glide so the boat sets down past it; any other jump keeps the usual length.
+    if (input.jump && !prevJump && !jumping) {
+      const reach = input.jumpReach || 0;
+      const speed = Math.max(state.speed, 0.75);
+      jumpGlide = reach > 0
+        ? Math.max(JUMP_HOLD, reach / speed - JUMP_RISE - JUMP_FALL)
+        : JUMP_HOLD;
+      jumpT = 0;
+      jumpArmed = true;
+      ensureWings();
+    }
+    prevJump = !!input.jump;
+    if (jumpT >= 0) {
+      jumpT += dt;
+      if (jumpT >= flightSpan()) jumpT = -1;
+    }
     settleOnWater(time, input, true);
     group.rotation.z += arcadeHeel;
+    group.position.y += jumpLift();
+    group.rotation.x += flightPitch();
+    poseWings();
+  }
+
+  function wingDeploy() {
+    if (jumpT < 0) return 0;
+    const out = 0.16;
+    if (jumpT < out) {
+      const u = jumpT / out;
+      return u * u * (3 - 2 * u);
+    }
+    const glideEnd = JUMP_RISE + jumpGlide;
+    if (jumpT < glideEnd) return 1;
+    const u = Math.min(1, (jumpT - glideEnd) / JUMP_FALL);
+    const s = u * u * (3 - 2 * u);
+    return 1 - s;
+  }
+
+  function flightPitch() {
+    if (jumpT < 0) return 0;
+    if (jumpT < JUMP_RISE) return -0.26 * Math.sin((jumpT / JUMP_RISE) * Math.PI * 0.5);
+    if (jumpT < JUMP_RISE + jumpGlide) return -0.1;
+    const u = Math.min(1, (jumpT - JUMP_RISE - jumpGlide) / JUMP_FALL);
+    if (u < 0.55) return THREE.MathUtils.lerp(-0.1, 0.16, u / 0.55);
+    return THREE.MathUtils.lerp(0.16, 0, (u - 0.55) / 0.45);
+  }
+
+  // One beat as the wings come out, then they hold level until they fold.
+  function wingFlap() {
+    if (jumpT < 0) return 0;
+    const beat = 0.42;
+    if (jumpT >= beat) return 0;
+    const u = jumpT / beat;
+    return Math.sin(u * Math.PI * 2) * 0.65;
+  }
+
+  function poseWings() {
+    const deploy = wingDeploy();
+    const show = wingLoaded && deploy > 0.04;
+    wingRoot.visible = show;
+    const spread = show ? deploy : 0;
+    const flap = show ? wingFlap() : 0;
+    for (const pivot of wingPivots) {
+      pivot.scale.set(spread, 1, 1);
+      // Negative X raises the +Z (bow) edge. The flap still swings the tips.
+      pivot.rotation.set(show ? -WING_NOSE : 0, 0, (pivot.userData.side || 1) * flap);
+    }
+  }
+
+  function loadWingMap(url, colorSpace) {
+    const tex = new THREE.TextureLoader().load(url);
+    tex.colorSpace = colorSpace;
+    tex.flipY = false;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function bindOriginalWingTextures(material) {
+    const diffuse = loadWingMap(WING_DIFFUSE, THREE.SRGBColorSpace);
+    const specular = loadWingMap(WING_SPECULAR, THREE.SRGBColorSpace);
+    const list = Array.isArray(material) ? material : [material];
+    for (const mat of list) {
+      if (!mat) continue;
+      mat.map = diffuse;
+      mat.color.set(0xffffff);
+      if ('specularColorMap' in mat) mat.specularColorMap = specular;
+      mat.side = THREE.DoubleSide;
+      mat.needsUpdate = true;
+      mat.userData.wingMap = WING_DIFFUSE;
+    }
+    return list.find(Boolean) || null;
+  }
+
+  // The uploaded pair stands on end. Lay it flat, then give each side its own
+  // root on the gunwale so the span runs out of the hull and the chord lies
+  // along the boat.
+  function layWingGeometry(root) {
+    const holder = new THREE.Group();
+    holder.rotation.x = -Math.PI / 2;
+    holder.add(root);
+    holder.updateMatrixWorld(true);
+    let mesh = null;
+    root.traverse((obj) => {
+      if (obj.isMesh && !mesh) mesh = obj;
+    });
+    if (!mesh) return null;
+    const geo = mesh.geometry.clone();
+    geo.applyMatrix4(mesh.matrixWorld);
+    const material = bindOriginalWingTextures(mesh.material);
+    return { geo, material };
+  }
+
+  function splitWing(geo, side) {
+    const index = geo.index;
+    const pos = geo.attributes.position;
+    const count = index ? index.count : pos.count;
+    const at = (i) => (index ? index.getX(i) : i);
+    const keep = [];
+    for (let i = 0; i < count; i += 3) {
+      const a = at(i);
+      const b = at(i + 1);
+      const c = at(i + 2);
+      const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
+      if (side > 0 ? cx >= 0 : cx < 0) keep.push(a, b, c);
+    }
+    const next = geo.clone();
+    next.setIndex(keep);
+    const box = new THREE.Box3();
+    const v = new THREE.Vector3();
+    for (let i = 0; i < keep.length; i += 1) {
+      v.fromBufferAttribute(next.attributes.position, keep[i]);
+      box.expandByPoint(v);
+    }
+    const inner = side > 0 ? box.min.x : box.max.x;
+    const midY = (box.min.y + box.max.y) * 0.5;
+    const midZ = (box.min.z + box.max.z) * 0.5;
+    next.translate(-inner, -midY, -midZ);
+    box.translate(new THREE.Vector3(-inner, -midY, -midZ));
+    next.boundingBox = box;
+    return next;
+  }
+
+  function attachWings(gltf) {
+    const laid = layWingGeometry(gltf.scene);
+    if (!laid || !laid.material) return;
+    wingRoot.clear();
+    wingPivots.length = 0;
+    const sizes = [];
+    for (const side of [1, -1]) {
+      const geo = splitWing(laid.geo, side);
+      const mesh = new THREE.Mesh(geo, laid.material);
+      mesh.frustumCulled = false;
+      // The pair was lying underside-up. Roll about the span so the top
+      // faces up. The pivot on the gunwale stays put.
+      mesh.rotation.x = Math.PI;
+      const pivot = new THREE.Group();
+      pivot.position.set(side * WING_GUNWALE_X, WING_GUNWALE_Y, 0);
+      pivot.userData.side = side;
+      pivot.add(mesh);
+      wingRoot.add(pivot);
+      wingPivots.push(pivot);
+      sizes.push(geo.boundingBox.getSize(new THREE.Vector3()));
+    }
+    const size = sizes[0] || new THREE.Vector3();
+    wingFit = {
+      meshes: wingPivots.length,
+      textured: true,
+      map: WING_DIFFUSE,
+      out: size.x,
+      thick: size.y,
+      along: size.z,
+    };
+    wingLoaded = true;
+    poseWings();
+  }
+
+  function ensureWings() {
+    if (wingLoaded || wingLoading) return;
+    wingLoading = true;
+    const loader = new GLTFLoader();
+    const attempt = async () => {
+      for (const url of WING_URLS) {
+        try {
+          const res = await fetch(url, { method: 'GET' });
+          if (!res.ok) continue;
+          const gltf = await loader.loadAsync(url);
+          attachWings(gltf);
+          return;
+        } catch {
+          // The folder can be empty. The flight still runs.
+        }
+      }
+    };
+    attempt().finally(() => {
+      wingLoading = false;
+    });
+  }
+
+  function jumpLift() {
+    if (jumpT < 0) return 0;
+    if (jumpT < JUMP_RISE) return JUMP_HEIGHT * Math.sin((jumpT / JUMP_RISE) * Math.PI * 0.5);
+    if (jumpT < JUMP_RISE + jumpGlide) return JUMP_HEIGHT;
+    const fall = jumpT - JUMP_RISE - jumpGlide;
+    if (fall >= JUMP_FALL) return 0;
+    return JUMP_HEIGHT * Math.cos((fall / JUMP_FALL) * Math.PI * 0.5);
   }
 
   function beginStroke(side) {
@@ -578,7 +818,9 @@ export function createBoat() {
       if (input.arcadeOver) {
         state.speed = 0;
         state.yawRate = 0;
+        jumpT = -1;
         settleOnWater(time, input, true);
+        poseWings();
         applyOars();
         applyStern();
         return;
@@ -590,6 +832,9 @@ export function createBoat() {
     }
     arcadeLaneArmed = false;
     arcadeAim = -1;
+    jumpT = -1;
+    prevJump = false;
+    poseWings();
     braking = !!input.brake;
     sequenceWait = Math.max(0, sequenceWait - dt);
 
@@ -726,10 +971,14 @@ export function createBoat() {
     arcadeFrom = 0;
     arcadeTo = 0;
     arcadeHeel = 0;
+    jumpT = -1;
+    prevJump = false;
     group.position.set(0, 0, 0);
     group.rotation.set(0, 0, 0);
     placeCaptain();
   }
+
+  ensureWings();
 
   return {
     group,
@@ -737,6 +986,31 @@ export function createBoat() {
     tryStroke,
     update,
     faceCaptain,
+    jumpLift,
+    jumpArmed() {
+      return jumpArmed;
+    },
+    wingDeploy,
+    wingsLoaded() {
+      return wingLoaded;
+    },
+    wingSample() {
+      const centers = wingPivots.map((pivot) => {
+        const box = new THREE.Box3().setFromObject(pivot);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        return { x: center.x, y: center.y, z: center.z, sx: size.x, sy: size.y, sz: size.z };
+      });
+      return {
+        loaded: wingLoaded,
+        visible: wingRoot.visible,
+        deploy: wingDeploy(),
+        flap: wingFlap(),
+        pitch: wingPivots[0] ? wingPivots[0].rotation.x : 0,
+        ...(wingFit || { meshes: 0, textured: false, map: '', out: 0, thick: 0, along: 0 }),
+        centers,
+      };
+    },
     reset,
     setHull,
     lanternPosition,
