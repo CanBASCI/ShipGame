@@ -14,8 +14,9 @@ const BANK = 4.72;
 const ARCADE_CRUISE = 1.15;
 const LANE_OFFSET = 3.4;
 const LANES = [-LANE_OFFSET, 0, LANE_OFFSET];
-const LANE_EASE = 7;
-const ARCADE_YAW = 0.18;
+// The bow swings toward the lane, then comes back to the canal as the hull arrives.
+const ARCADE_YAW_PEAK = 0.95;
+const ARCADE_HEEL = 0.3;
 // The canal is a straight run on +Z, so downstream is world yaw 0.
 // A bend would return that stretch's heading instead of this constant.
 const DOWNSTREAM_YAW = 0;
@@ -288,6 +289,18 @@ export function createBoat() {
   let arcadeLaneArmed = false;
   let prevArcadeLeft = false;
   let prevArcadeRight = false;
+  let arcadeAim = -1;
+  let arcadeFrom = 0;
+  let arcadeTo = 0;
+  let arcadePhase = 1;
+  let arcadeDuration = 0;
+  let arcadeHeel = 0;
+
+  function arcadeCrossTime(distance) {
+    const span = Math.abs(distance);
+    if (span < 0.04) return 0;
+    return (1.5 * span) / (ARCADE_CRUISE * Math.tan(ARCADE_YAW_PEAK));
+  }
 
   function nearestArcadeLane(x) {
     let best = 1;
@@ -364,14 +377,38 @@ export function createBoat() {
     state.speed += (ARCADE_CRUISE - state.speed) * settle;
     if (state.speed < 0) state.speed = 0;
 
-    const targetX = LANES[arcadeLane];
-    const ease = 1 - Math.exp(-LANE_EASE * dt);
-    state.x += (targetX - state.x) * ease;
-    state.z += state.speed * dt;
-    const lean = clamp((targetX - state.x) / LANE_OFFSET, -1, 1) * ARCADE_YAW;
-    state.yaw += (lean - state.yaw) * ease;
+    if (arcadeLane !== arcadeAim) {
+      arcadeFrom = state.x;
+      arcadeTo = LANES[arcadeLane];
+      arcadeDuration = arcadeCrossTime(arcadeTo - arcadeFrom);
+      arcadePhase = 0;
+      arcadeAim = arcadeLane;
+    }
+
+    const follow = 1 - Math.exp(-9 * dt);
+    if (arcadeDuration > 0 && arcadePhase < 1) {
+      arcadePhase = Math.min(1, arcadePhase + dt / arcadeDuration);
+      const p = arcadePhase;
+      const dist = arcadeTo - arcadeFrom;
+      const shaped = p * p * (3 - 2 * p);
+      const slope = 6 * p * (1 - p);
+      state.x = arcadeFrom + dist * shaped;
+      const vx = dist * slope / arcadeDuration;
+      const yawTarget = Math.atan2(vx, Math.max(state.speed, 0.2));
+      state.yaw += (yawTarget - state.yaw) * follow;
+      state.z += state.speed * dt;
+      const dir = Math.sign(dist) || 0;
+      const heelTarget = -dir * Math.sin(p * Math.PI * 2) * ARCADE_HEEL;
+      arcadeHeel += (heelTarget - arcadeHeel) * follow;
+    } else {
+      state.yaw += (0 - state.yaw) * follow;
+      arcadeHeel += (0 - arcadeHeel) * follow;
+      state.z += state.speed * dt;
+      state.x += (arcadeTo - state.x) * follow;
+    }
     state.yawRate = 0;
     settleOnWater(time, input, true);
+    group.rotation.z += arcadeHeel;
   }
 
   function beginStroke(side) {
@@ -423,6 +460,7 @@ export function createBoat() {
       return;
     }
     arcadeLaneArmed = false;
+    arcadeAim = -1;
     braking = !!input.brake;
     sequenceWait = Math.max(0, sequenceWait - dt);
 
@@ -551,6 +589,12 @@ export function createBoat() {
     arcadeLaneArmed = false;
     prevArcadeLeft = false;
     prevArcadeRight = false;
+    arcadeAim = -1;
+    arcadeFrom = 0;
+    arcadeTo = 0;
+    arcadePhase = 1;
+    arcadeDuration = 0;
+    arcadeHeel = 0;
     group.position.set(0, 0, 0);
     group.rotation.set(0, 0, 0);
   }
