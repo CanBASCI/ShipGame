@@ -58,21 +58,22 @@ const HAND_LAMP_HANG = HAND_LAMP_MESH_HEIGHT * HAND_LAMP_SCALE;
 // Slide the cap from the palm socket toward the fingertips, still under the hand.
 const HAND_LAMP_REACH = 0.04;
 const SLIDE_LEAN = Math.PI / 4;
+const FLIGHT_ARC = 0.4;
 
-// Two seconds, split in half. The first second speeds up from the spawn lane
-// to the midpoint. The second second slows into the destination. Lean rises
-// with the speedup and falls with the slowdown, with zero slope at both ends.
+// One smooth curve over the 2 second flight. Position eases in, is fastest
+// in the middle, and eases out, with no break in the middle. The lean and
+// the hop follow the speed, so both peak while the ghost is moving fastest.
 function slideMove(elapsed) {
   const t = Math.min(1, Math.max(0, elapsed / SLIDE_SECONDS));
-  const smooth = (u) => u * u * (3 - 2 * u);
-  if (t <= 0.5) {
-    const u = t * 2;
-    const accel = u * u;
-    return { progress: 0.5 * accel, lean: smooth(u), done: false };
-  }
-  const u = (t - 0.5) * 2;
-  const decel = 1 - (1 - u) * (1 - u);
-  return { progress: 0.5 + 0.5 * decel, lean: smooth(1 - u), done: t >= 1 };
+  const progress = t * t * t * (t * (t * 6 - 15) + 10);
+  const pace = 16 * t * t * (1 - t) * (1 - t);
+  return {
+    progress,
+    lean: pace,
+    arc: FLIGHT_ARC * pace,
+    turn: progress,
+    done: t >= 1,
+  };
 }
 const lampUp = new THREE.Vector3(0, 1, 0);
 const yawAxis = new THREE.Vector3(0, 1, 0);
@@ -626,11 +627,13 @@ export function createObstacles(scene) {
         if (move && move.progress > 0) {
           x += (LANES[item.slideLane] - x) * move.progress;
         }
-        item.group.position.set(x, waterY(x, item.z, time), item.z);
+        const hop = move ? move.arc : 0;
+        item.flightHop = hop;
+        item.group.position.set(x, waterY(x, item.z, time) + hop, item.z);
         if (item.type === 'ghost_blood') {
           // Stayers keep the heading they spawned with and stay upright.
-          // A slider faces the empty lane at 20 m. Over the next 2 seconds it
-          // leans as it speeds up, stands up as it slows in, then tracks the bow.
+          // A slider turns toward the empty lane while it flies, leans with
+          // the speed, lands upright, then tracks the bow lantern.
           let yaw = item.spawnYaw;
           let lean = 0;
           if (willSlide && item.slideElapsed != null) {
@@ -639,9 +642,10 @@ export function createObstacles(scene) {
               const dx = bow.x - item.group.position.x;
               const dz = bow.z - item.group.position.z;
               if (dx * dx + dz * dz > 1e-6) yaw = Math.atan2(dx, dz) - item.faceYaw;
-            } else if (!arrived) {
+            } else if (!arrived && move) {
               const dir = Math.sign(LANES[item.slideLane] - LANES[item.lane]) || 1;
-              yaw = dir * (Math.PI / 2) - item.faceYaw;
+              const faceTarget = dir * (Math.PI / 2) - item.faceYaw;
+              yaw = item.spawnYaw + wrapAngle(faceTarget - item.spawnYaw) * move.turn;
               lean = -dir * SLIDE_LEAN * move.lean;
             }
           }
@@ -740,6 +744,7 @@ export function createObstacles(scene) {
           hasLamp: !!item.lamp,
           slideLane: item.slideLane == null ? item.lane : item.slideLane,
           slideElapsed: item.slideElapsed == null ? null : item.slideElapsed,
+          hop: item.flightHop || 0,
           tilt: (() => {
             axisProbe.set(0, 1, 0).applyQuaternion(item.group.quaternion);
             return Math.atan2(axisProbe.x, axisProbe.y);
