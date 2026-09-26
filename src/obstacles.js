@@ -15,6 +15,11 @@ const TARGET_HEIGHT = 1.75;
 const HIT_X = 1.25;
 const HIT_AHEAD = 2.15;
 const HIT_BEHIND = 1.25;
+// Beyond this distance a ghost keeps the heading it spawned with.
+// Inside it, the yaw eases onto the bow lantern and is finished by LOOK_DONE,
+// still short of the boat.
+const LOOK_FROM = 20;
+const LOOK_DONE = 8;
 
 // face: this type yaws toward the bow lantern. Later types omit it and stay frozen.
 // Add another entry here when a new obstacle model arrives.
@@ -37,6 +42,10 @@ function waterY(x, z, time) {
     Math.sin(x * 0.72 + z * 0.28 + time * 0.48) * 0.03 +
     Math.sin(x * 1.55 - z * 1.05 + time * 0.72) * 0.014
   );
+}
+
+function wrapAngle(rad) {
+  return Math.atan2(Math.sin(rad), Math.cos(rad));
 }
 
 function chooseLanes(rng) {
@@ -191,6 +200,8 @@ export function createObstacles(scene) {
           action.play();
         }
       }
+      const spawnYaw = rng() * Math.PI * 2;
+      group.rotation.y = spawnYaw;
       alive.push({
         group,
         model,
@@ -200,6 +211,7 @@ export function createObstacles(scene) {
         foot: -template.foot * template.scale,
         face: !!type.face,
         faceYaw: template.faceYaw,
+        spawnYaw,
         type: type.id,
       });
     }
@@ -255,11 +267,20 @@ export function createObstacles(scene) {
         item.model.rotation.set(0, 0, 0);
         item.group.position.set(LANES[item.lane], waterY(LANES[item.lane], item.z, time), item.z);
         if (item.face && bow) {
+          const along = item.z - boatPos.z;
           const dx = bow.x - item.group.position.x;
           const dz = bow.z - item.group.position.z;
-          // Full aim on this frame, including the spawn frame. The jaw faces
-          // +X, so the heading is subtracted from the lantern bearing. No blend.
-          if (dx * dx + dz * dz > 1e-6) item.group.rotation.y = Math.atan2(dx, dz) - item.faceYaw;
+          let yaw = item.spawnYaw;
+          if (along < LOOK_FROM && dx * dx + dz * dz > 1e-6) {
+            const target = Math.atan2(dx, dz) - item.faceYaw;
+            if (along <= LOOK_DONE) yaw = target;
+            else {
+              const t = (LOOK_FROM - along) / (LOOK_FROM - LOOK_DONE);
+              const s = 1 - (1 - t) * (1 - t);
+              yaw = item.spawnYaw + wrapAngle(target - item.spawnYaw) * s;
+            }
+          }
+          item.group.rotation.y = yaw;
         }
         if (overlaps(boatPos, item)) hit = true;
       }
@@ -286,11 +307,12 @@ export function createObstacles(scene) {
         clips: alive.filter((item) => item.mixer).length,
         animTime: first && first.mixer ? first.mixer.time : 0,
         faceYaw: first ? first.faceYaw : 0,
-        placed: alive.slice(0, 8).map((item) => ({
+        placed: alive.map((item) => ({
           lane: item.lane,
           x: item.group.position.x,
           z: item.z,
           yaw: item.group.rotation.y,
+          spawnYaw: item.spawnYaw,
           type: item.type,
         })),
       };
