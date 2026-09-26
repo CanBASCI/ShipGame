@@ -101,7 +101,7 @@ const fragmentShader = /* glsl */ `
       if (uPatch[i] > 1.5) {
         // Cool moonlight on the river. Wide enough that the water reads,
         // brightest under the moon, gone by the boat. Not a gold ribbon.
-        float head = smoothstep(-20.0, 6.0, along);
+        float head = smoothstep(-40.0, 6.0, along);
         float t = clamp(along / 34.0, 0.0, 1.0);
         // Wide across the river, then soft at the banks. Fades out before the boat.
         float span = exp(-across * across * 0.02);
