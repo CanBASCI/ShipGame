@@ -110,7 +110,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2 };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.05 };
 world.setTune(tune);
 
 function dayAmount() {
@@ -309,8 +309,10 @@ window.addEventListener('error', (event) => {
 });
 
 const TUNE_STEP = 1.1;
-const TUNE_MIN = { ghostLit: 0.05 };
-const TUNE_MAX = { ghostLit: 8 };
+const TUNE_MIN = { ghostLit: 0.05, bloodLit: 0 };
+const TUNE_MAX = { ghostLit: 8, bloodLit: 8 };
+const FINE_TUNE = new Set(['bloodLit']);
+const FINE_STEP = 0.01;
 const fogToggle = document.getElementById('fog-toggle');
 const arcadeToggle = document.getElementById('arcade-toggle');
 const bambooToggle = document.getElementById('bamboo-toggle');
@@ -327,7 +329,8 @@ function setPaused(value) {
 
 function paintTune() {
   for (const el of document.querySelectorAll('.tune-val')) {
-    el.textContent = tune[el.dataset.val].toFixed(1);
+    const digits = FINE_TUNE.has(el.dataset.val) ? 2 : 1;
+    el.textContent = tune[el.dataset.val].toFixed(digits);
   }
   dayVal.textContent = dayAmount().toFixed(1);
   bambooToggle.textContent = tune.bambooOn ? 'Açık' : 'Kapalı';
@@ -374,8 +377,12 @@ document.getElementById('tune').addEventListener('click', (event) => {
   const button = event.target.closest('button[data-tune]');
   if (!button) return;
   const key = button.dataset.tune;
-  const next = tune[key] * (Number(button.dataset.dir) > 0 ? TUNE_STEP : 1 / TUNE_STEP);
-  tune[key] = Math.min(TUNE_MAX[key] ?? 4, Math.max(TUNE_MIN[key] ?? 0.25, next));
+  const dir = Number(button.dataset.dir) > 0 ? 1 : -1;
+  const next = FINE_TUNE.has(key)
+    ? tune[key] + dir * FINE_STEP
+    : tune[key] * (dir > 0 ? TUNE_STEP : 1 / TUNE_STEP);
+  const clamped = Math.min(TUNE_MAX[key] ?? 4, Math.max(TUNE_MIN[key] ?? 0.25, next));
+  tune[key] = FINE_TUNE.has(key) ? Math.round(clamped * 100) / 100 : clamped;
   applyTune();
 });
 

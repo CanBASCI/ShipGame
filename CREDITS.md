@@ -106,13 +106,22 @@ These files are stored in the repo and loaded by the scene.
 - Use: the first Arcade obstacle. Copies stand on the water in the lanes ahead of the boat, play the model's own clip in place, and turn to face the bow lantern. Arcade off does not show them.
 - This work is based on "Ghost Daughter" (https://sketchfab.com/3d-models/ghost-daughter-89850ac12e0f468582d4d0dcebd4efbc) by LostBoyz2078 (https://sketchfab.com/LostModels2025) licensed under CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/).
 
+## Ghost
+
+- Author: kira.is.real (https://sketchfab.com/jadeisreal0615)
+- License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+- Source: https://sketchfab.com/3d-models/ghost-4e71afbfee0047768ed0ddb3982d9887
+- Files: `public/assets/obstacles/ghost_blood/scene.gltf`, `scene.bin`, `license.txt`, and `textures/`
+- Use: an Arcade obstacle mixed with the ghost daughter and the rock. Copies stand on the water in the lanes. This model has no clip and no lantern mesh. A red light inside the cloak lights only this ghost. About half of them, chosen when they spawn, slide into an empty lane. The move starts at 20 m and finishes in 2 seconds: they turn toward that lane, speed up to the middle while leaning head-first, slow into the lane while standing up, then follow the bow lantern. The rest keep the heading they spawned with. Arcade off does not show them.
+- This work is based on "Ghost" (https://sketchfab.com/3d-models/ghost-4e71afbfee0047768ed0ddb3982d9887) by kira.is.real (https://sketchfab.com/jadeisreal0615) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
+
 ## Rock
 
 - Author: Siesta (https://sketchfab.com/siesta)
 - License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
 - Source: https://sketchfab.com/3d-models/rock-b66d5b63deb447299ca3effa904bc789
 - Files: `public/assets/obstacles/rock/scene.gltf`, `scene.bin`, `license.txt`, and `textures/`
-- Use: an Arcade obstacle mixed with the ghost. Copies sit frozen on the water in the lanes. They do not turn. Arcade off does not show them.
+- Use: an Arcade obstacle mixed with the ghosts. Copies sit frozen on the water in the lanes. They do not turn. Arcade off does not show them.
 - This work is based on "Rock" (https://sketchfab.com/3d-models/rock-b66d5b63deb447299ca3effa904bc789) by Siesta (https://sketchfab.com/siesta) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
 
 ## Bamboo lantern
