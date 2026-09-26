@@ -34,6 +34,34 @@ html, body {
   opacity: 0;
 }
 
+#arcade-hud {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  gap: 14px;
+  margin: 0;
+  font-family: Palatino, "Palatino Linotype", Georgia, serif;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: rgba(244, 240, 255, 0.82);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  z-index: 2;
+}
+
+#arcade-hud[hidden] {
+  display: none;
+}
+
+#arcade-hud .hud-orange b {
+  color: #ff7a2a;
+}
+
+#arcade-hud .hud-cyan b {
+  color: #3ee0ff;
+}
+
 #tune {
   position: fixed;
   top: 14px;

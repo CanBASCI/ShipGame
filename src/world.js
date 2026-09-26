@@ -8,6 +8,15 @@ const KEEP_AHEAD = 3;
 const LEFT_COLORS = [0xc43cff, 0x2ee7ff, 0x8a3cff, 0xe85cff, 0x49d6ff];
 const RIGHT_COLORS = [0xff2f86, 0xffa033, 0xff4b9a, 0xffd27a, 0xff3d6e];
 const LANTERN_PALETTE = [0xffc15a, 0xff4fa3, 0xb44bff, 0x3ee0ff, 0xff7a2a, 0xf4f0ff, 0xffe08a, 0xff2f86];
+const ARCADE_LAMPS = [
+  { kind: 'orange', color: 0xff7a2a },
+  { kind: 'magenta', color: 0xff2f86 },
+  { kind: 'cyan', color: 0x3ee0ff },
+  { kind: 'white', color: 0xf4f0ff },
+];
+// Side lanes sit at ±3.4. A pickup lands when that lane passes the bank lamp.
+const LANE_X = 3.4;
+const PASS_Z = 1.35;
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -195,6 +204,181 @@ export function createWorld(scene) {
     else treeQueue.push(() => place(true));
   }
 
+  let arcadeOn = false;
+  const boltDir = new THREE.Vector3();
+  const boltSide = new THREE.Vector3();
+  let streakTargets = null;
+  const BOLT_POINTS = 8;
+  const boltPool = [];
+  let boltWarm = 0;
+
+  function arcadeKind(index, spec) {
+    const n = Math.abs((index * 13 + Math.round(spec.z * 4) + (spec.side < 0 ? 7 : 0)) | 0);
+    return ARCADE_LAMPS[n % ARCADE_LAMPS.length];
+  }
+
+  // About two of every seven stay, so the row breaks into gaps. Neighbors can match.
+  function arcadeShown(index, spec) {
+    const n = Math.abs((index * 17 + Math.round(spec.z * 3) + (spec.side < 0 ? 11 : 0)) | 0);
+    return (n % 7) < 2;
+  }
+
+  function applyPresence(L) {
+    const hide = arcadeOn && !L.arcadeShown;
+    L.model.visible = !hide;
+    if (!hide) L.base.copy(arcadeOn ? L.arcadeColor : L.restBase);
+  }
+
+  function darkenLantern(L) {
+    for (const m of L.mats) {
+      if (m.userData.role !== 'paper') continue;
+      m.emissiveIntensity = 0;
+      m.emissive.set(0x000000);
+      m.color.set(0x100c0e);
+    }
+  }
+
+  function makeBolt() {
+    const positions = new Float32Array(BOLT_POINTS * 3);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const line = new THREE.Line(geo, mat);
+    line.frustumCulled = false;
+    line.visible = true;
+    scene.add(line);
+    return {
+      line,
+      mat,
+      positions,
+      attr: geo.getAttribute('position'),
+      busy: false,
+      kind: '',
+      born: 0,
+      life: 0.17,
+      from: new THREE.Vector3(),
+      to: new THREE.Vector3(),
+      jag: new Float32Array(BOLT_POINTS),
+      rewrote: false,
+    };
+  }
+
+  for (let i = 0; i < 6; i += 1) boltPool.push(makeBolt());
+
+  function seedJag(bolt) {
+    for (let i = 0; i < BOLT_POINTS; i += 1) bolt.jag[i] = Math.random() * 2 - 1;
+    bolt.jag[0] = 0;
+    bolt.jag[BOLT_POINTS - 1] = 0;
+  }
+
+  function writeBolt(bolt) {
+    boltDir.copy(bolt.to).sub(bolt.from);
+    const len = boltDir.length();
+    if (len < 1e-4) boltDir.set(0, 1, 0);
+    else boltDir.multiplyScalar(1 / len);
+    boltSide.set(-boltDir.z, 0, boltDir.x);
+    if (boltSide.lengthSq() < 1e-8) boltSide.set(1, 0, 0);
+    const amp = Math.min(0.62, Math.max(0.18, len * 0.14));
+    const pos = bolt.positions;
+    for (let i = 0; i < BOLT_POINTS; i += 1) {
+      const t = i / (BOLT_POINTS - 1);
+      const edge = i === 0 || i === BOLT_POINTS - 1;
+      const wobble = edge ? 0 : bolt.jag[i] * amp;
+      const lift = edge ? 0 : bolt.jag[(i + 3) % BOLT_POINTS] * amp * 0.45;
+      pos[i * 3] = bolt.from.x + boltDir.x * len * t + boltSide.x * wobble;
+      pos[i * 3 + 1] = bolt.from.y + boltDir.y * len * t + lift;
+      pos[i * 3 + 2] = bolt.from.z + boltDir.z * len * t + boltSide.z * wobble;
+    }
+    bolt.attr.needsUpdate = true;
+  }
+
+  function spawnStreak(from, kind, color, time) {
+    let bolt = null;
+    for (const item of boltPool) {
+      if (!item.busy) {
+        bolt = item;
+        break;
+      }
+    }
+    if (!bolt) bolt = boltPool[0];
+    bolt.busy = true;
+    bolt.kind = kind;
+    bolt.born = time;
+    bolt.life = 0.17;
+    bolt.rewrote = false;
+    bolt.from.copy(from);
+    if (streakTargets && streakTargets[kind]) bolt.to.copy(streakTargets[kind]);
+    else bolt.to.copy(from);
+    bolt.mat.color.set(color);
+    bolt.mat.opacity = 1;
+    bolt.line.visible = true;
+    seedJag(bolt);
+    writeBolt(bolt);
+  }
+
+  function updateStreaks(time) {
+    if (boltWarm < 2) boltWarm += 1;
+    for (const bolt of boltPool) {
+      if (!bolt.busy) {
+        if (boltWarm >= 2) {
+          bolt.line.visible = false;
+          bolt.mat.opacity = 0;
+        }
+        continue;
+      }
+      const u = (time - bolt.born) / bolt.life;
+      if (u >= 1) {
+        bolt.busy = false;
+        bolt.line.visible = boltWarm < 2;
+        bolt.mat.opacity = 0;
+        continue;
+      }
+      if (streakTargets && streakTargets[bolt.kind]) bolt.to.copy(streakTargets[bolt.kind]);
+      if (!bolt.rewrote && u > 0.4) {
+        seedJag(bolt);
+        bolt.rewrote = true;
+      }
+      bolt.mat.opacity = (0.4 + 0.6 * Math.abs(Math.sin(u * 46))) * (1 - u);
+      writeBolt(bolt);
+    }
+  }
+
+  function setArcade(on) {
+    arcadeOn = !!on;
+    for (const L of lanterns) {
+      L.collected = false;
+      applyPresence(L);
+    }
+  }
+
+  function setStreakTargets(targets) {
+    streakTargets = targets;
+  }
+
+  function pick(bow, time) {
+    if (!arcadeOn) return [];
+    const hits = [];
+    for (const L of lanterns) {
+      if (L.collected || !L.arcadeShown) continue;
+      if (Math.abs(L.pos.z - bow.z) > PASS_Z) continue;
+      const laneX = L.side > 0 ? LANE_X : -LANE_X;
+      if (Math.abs(bow.x - laneX) > 1.2) continue;
+      L.collected = true;
+      darkenLantern(L);
+      hits.push(L.kind);
+      if (L.kind !== 'white') spawnStreak(L.pos, L.kind, L.arcadeColor, time);
+    }
+    if (hits.length) placeLanternLights();
+    return hits;
+  }
+
   function lanternPlan(index, rng) {
     if (index === 0) {
       return [
@@ -274,15 +458,23 @@ export function createWorld(scene) {
       const px = spec.x != null ? spec.x : spec.side * 6.35;
       model.position.set(px, 0, spec.z);
       parent.add(model);
+      const kind = arcadeKind(index, spec);
       const head = new THREE.Vector3(
         px - spec.side * 0.72 * s,
         (1.72 + headLift) * s,
         index * CHUNK + spec.z,
       );
-      lanterns.push({
+      const entry = {
         chunk: index,
+        model,
+        side: spec.side,
+        arcadeShown: arcadeShown(index, spec),
         pos: head,
         base: color,
+        restBase: color.clone(),
+        arcadeColor: new THREE.Color(kind.color),
+        kind: kind.kind,
+        collected: false,
         gain: hero ? 1.0125 : distant ? 0.56953125 : 0.7171875,
         tight: hero ? 0.72 : 0.88,
         distance: hero ? 26 : distant ? 11 : 16,
@@ -290,7 +482,9 @@ export function createWorld(scene) {
         mats,
         emNight: hero ? 1.18125 : distant ? 0.6328125 : 0.8859375,
         emDay: 0.2953125,
-      });
+      };
+      lanterns.push(entry);
+      applyPresence(entry);
     };
     if (lanternTemplate) place(false);
     else lanternQueue.push(() => place(true));
@@ -394,6 +588,34 @@ export function createWorld(scene) {
       if (!chunks.has(index)) buildChunk(index);
     }
 
+    lightPose.day = day;
+    lightPose.yaw = yaw;
+    lightPose.pos.copy(boatPos);
+    placeLanternLights();
+
+    sky.mesh.position.copy(boatPos);
+    sky.mesh.position.y = 0;
+    sky.uniforms.uDay.value = day;
+    const fx = Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    // Fog stays in the world. The bow lantern and the moon are what light it.
+    const bowAhead = 1.94;
+    mist.uniforms.uBoat.value.copy(boatPos);
+    mist.uniforms.uYaw.value = yaw;
+    mist.uniforms.uDay.value = day;
+    mist.uniforms.uTime.value = time;
+    mist.uniforms.uFwd.value.set(fx, 0, fz);
+    mist.uniforms.uBow.value.set(boatPos.x + fx * bowAhead, boatPos.y + 0.5, boatPos.z + fz * bowAhead);
+    mist.uniforms.uMoon.value.set(0, 9.2, boatPos.z + 30);
+    updateStreaks(time);
+  }
+
+  const lightPose = { day: 0, yaw: 0, pos: new THREE.Vector3() };
+
+  function placeLanternLights() {
+    const day = lightPose.day;
+    const yaw = lightPose.yaw;
+    const boatPos = lightPose.pos;
     const ranked = lanternsAhead(boatPos, yaw, 10);
     const reachOf = new Map();
     for (const item of ranked) {
@@ -401,6 +623,15 @@ export function createWorld(scene) {
     }
 
     for (const L of lanterns) {
+      if (arcadeOn && !L.arcadeShown) {
+        L.model.visible = false;
+        continue;
+      }
+      L.model.visible = true;
+      if (arcadeOn && L.collected) {
+        darkenLantern(L);
+        continue;
+      }
       tmp.copy(L.base).lerp(warm, day * 0.25);
       const em = THREE.MathUtils.lerp(L.emNight, L.emDay, day);
       const reach = reachOf.get(L) ?? 0;
@@ -424,24 +655,9 @@ export function createWorld(scene) {
       tmp.copy(item.L.base).lerp(warm, day * 0.4);
       light.color.copy(tmp);
       light.position.copy(item.L.pos);
-      light.distance = item.L.distance;
+      light.distance = arcadeOn ? 6.2 : item.L.distance;
       light.intensity = item.L.intensity * THREE.MathUtils.lerp(1, 0.38, day) * bambooGlow.value * reach;
     }
-
-    sky.mesh.position.copy(boatPos);
-    sky.mesh.position.y = 0;
-    sky.uniforms.uDay.value = day;
-    const fx = Math.sin(yaw);
-    const fz = Math.cos(yaw);
-    // Fog stays in the world. The bow lantern and the moon are what light it.
-    const bowAhead = 1.94;
-    mist.uniforms.uBoat.value.copy(boatPos);
-    mist.uniforms.uYaw.value = yaw;
-    mist.uniforms.uDay.value = day;
-    mist.uniforms.uTime.value = time;
-    mist.uniforms.uFwd.value.set(fx, 0, fz);
-    mist.uniforms.uBow.value.set(boatPos.x + fx * bowAhead, boatPos.y + 0.5, boatPos.z + fz * bowAhead);
-    mist.uniforms.uMoon.value.set(0, 9.2, boatPos.z + 30);
   }
 
   function lanternsAhead(boatPos, yaw, count) {
@@ -449,6 +665,7 @@ export function createWorld(scene) {
     const fz = Math.cos(yaw);
     const ahead = [];
     for (const L of lanterns) {
+      if (arcadeOn && (L.collected || !L.arcadeShown)) continue;
       const dx = L.pos.x - boatPos.x;
       const dz = L.pos.z - boatPos.z;
       if (dx * fx + dz * fz <= 0) continue;
@@ -498,6 +715,9 @@ export function createWorld(scene) {
       treeLight.value = next.tree;
       mist.uniforms.uFogOn.value = next.fog ? 1 : 0;
     },
+    setArcade,
+    setStreakTargets,
+    pick,
   };
 }
 

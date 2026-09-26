@@ -100,6 +100,57 @@ function dayAmount() {
   return dayHold;
 }
 
+const pickup = {
+  orange: [],
+  cyan: [],
+  magenta: 0,
+  points: 0,
+};
+const ORANGE_LIFE = 2;
+const CYAN_LIFE = 1;
+const streakAnchors = {
+  orange: new THREE.Vector3(),
+  magenta: new THREE.Vector3(),
+  cyan: new THREE.Vector3(),
+};
+const pickupBow = new THREE.Vector3();
+const arcadeHud = document.getElementById('arcade-hud');
+const arcadePoints = document.getElementById('arcade-points');
+const arcadeLives = document.getElementById('arcade-lives');
+const arcadeOrange = document.getElementById('arcade-orange');
+const arcadeCyan = document.getElementById('arcade-cyan');
+
+function clearPickups() {
+  pickup.orange.length = 0;
+  pickup.cyan.length = 0;
+  pickup.magenta = 0;
+  pickup.points = 0;
+}
+
+function expirePickups(now) {
+  while (pickup.orange.length && pickup.orange[0] <= now) pickup.orange.shift();
+  while (pickup.cyan.length && pickup.cyan[0] <= now) pickup.cyan.shift();
+}
+
+let hudKey = '';
+
+function paintHud() {
+  if (!arcadeHud) return;
+  arcadeHud.hidden = !tune.arcade;
+  if (!tune.arcade) {
+    hudKey = '';
+    return;
+  }
+  const lives = Math.floor(pickup.magenta / 10);
+  const key = `${pickup.points}|${lives}|${pickup.orange.length}|${pickup.cyan.length}`;
+  if (key === hudKey) return;
+  hudKey = key;
+  arcadePoints.textContent = String(pickup.points);
+  arcadeLives.textContent = String(lives);
+  arcadeOrange.textContent = String(pickup.orange.length);
+  arcadeCyan.textContent = String(pickup.cyan.length);
+}
+
 function inputState(day) {
   return {
     forward: keys.has('KeyW') || keys.has('ArrowUp'),
@@ -108,6 +159,9 @@ function inputState(day) {
     turnRight: keys.has('KeyD') || keys.has('ArrowRight'),
     day,
     arcade: tune.arcade,
+    orange: pickup.orange.length,
+    cyan: pickup.cyan.length,
+    magenta: pickup.magenta,
   };
 }
 
@@ -170,19 +224,47 @@ function updateCamera(dt, jump) {
 function update(dt) {
   const day = dayAmount();
   time += dt;
+  if (tune.arcade) expirePickups(time);
   boat.update(dt, time, inputState(day));
   if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
   world.update(boat.group.position, time, day, boat.state.yaw);
+  if (tune.arcade) {
+    const yaw = boat.state.yaw;
+    pickupBow.set(
+      boat.state.x + Math.sin(yaw) * 1.7,
+      boat.group.position.y,
+      boat.state.z + Math.cos(yaw) * 1.7,
+    );
+    boat.streakAnchors(streakAnchors);
+    world.setStreakTargets(streakAnchors);
+    const hits = world.pick(pickupBow, time);
+    for (const kind of hits) {
+      if (kind === 'orange') pickup.orange.push(time + ORANGE_LIFE);
+      else if (kind === 'cyan') pickup.cyan.push(time + CYAN_LIFE);
+      else if (kind === 'magenta') pickup.magenta += 1;
+      else if (kind === 'white') pickup.points += 1;
+    }
+    paintHud();
+  }
   boat.headlight.getWorldPosition(headPos);
   boat.headlight.target.getWorldPosition(headAim);
   headAim.sub(headPos);
   if (headAim.lengthSq() > 1e-6) headAim.normalize();
-  const movingForward = boat.headlight.intensity > 0;
+  const movingForward = !tune.arcade && boat.headlight.intensity > 0;
   const headAngle = Math.min(Math.PI * 0.5 - 0.02, 0.5 * tune.spread);
   boat.headlight.angle = headAngle;
-  if (movingForward) boat.headlight.intensity = 42 * tune.fener;
-  const headAmt = movingForward ? tune.fener : 0;
+  const orange = pickup.orange.length;
+  if (tune.arcade) {
+    boat.headlight.color.set(0xff7a2a);
+    boat.headlight.intensity = orange > 0 ? 42 * orange * tune.fener : 0;
+  } else if (movingForward) {
+    boat.headlight.color.set(0xffe2b8);
+    boat.headlight.intensity = 42 * tune.fener;
+  } else {
+    boat.headlight.color.set(0xffe2b8);
+  }
+  const headAmt = tune.arcade ? (orange > 0 ? tune.fener * orange : 0) : (movingForward ? tune.fener : 0);
   const headSpread = Math.tan(headAngle);
   world.mist.uniforms.uBow.value.copy(headPos);
   world.mist.uniforms.uFwd.value.copy(headAim);
@@ -206,9 +288,11 @@ function update(dt) {
   reflectionScratch.length = 0;
   boatLanternColor.set(0xffb45a).lerp(new THREE.Color(0xffc48a), day * 0.3);
   for (const lamp of boat.lanternLights()) {
+    if (tune.arcade && lamp.stern) continue;
+    const color = tune.arcade && lamp.color ? lamp.color.clone() : boatLanternColor.clone();
     reflectionScratch.push({
       pos: lamp.pos,
-      color: boatLanternColor.clone(),
+      color,
       gain: 1.51875 * lamp.bright,
       tight: 0.9,
       patch: true,
@@ -320,6 +404,9 @@ fogToggle.addEventListener('click', () => {
 arcadeToggle.addEventListener('click', () => {
   tune.arcade = !tune.arcade;
   arcadeToggle.setAttribute('aria-pressed', String(tune.arcade));
+  clearPickups();
+  world.setArcade(tune.arcade);
+  paintHud();
 });
 
 document.getElementById('tune').addEventListener('click', (event) => {
@@ -369,6 +456,9 @@ window.__ship = {
   reset() {
     keys.clear();
     boat.reset();
+    clearPickups();
+    world.setArcade(tune.arcade);
+    paintHud();
     hintHidden = false;
     hint.classList.remove('hide');
   },
