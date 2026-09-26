@@ -20,6 +20,25 @@ const HIT_BEHIND = 1.25;
 // fast near the end, finished by LOOK_DONE, still short of the boat.
 const LOOK_FROM = 20;
 const LOOK_DONE = 8;
+// Same lantern mesh as the boat. It hangs under the ghost's hand.
+// Darkest red already in the right-bank lantern set (RIGHT_COLORS).
+const HAND_LAMP_SCALE = 0.85;
+const HAND_LAMP_COLOR = 0xff3d6e;
+// Half the first glow. Glass and the short point light share the cut.
+const HAND_LAMP_EMISSIVE = 1.3;
+const HAND_LAMP_INTENSITY = 4;
+// The hand lamp shares this layer with the ghost only, so it does not
+// light the river, the trees, or the leaves.
+const GHOST_LAMP_LAYER = 1;
+// Lantern_01 stands on its foot. Drop the foot by this so the cap meets the
+// hand and the body hangs below it, instead of rising off the knuckles.
+const HAND_LAMP_MESH_HEIGHT = 0.29425;
+const HAND_LAMP_HANG = HAND_LAMP_MESH_HEIGHT * HAND_LAMP_SCALE;
+const lampUp = new THREE.Vector3(0, 1, 0);
+const palmWorld = new THREE.Vector3();
+const bonePos = new THREE.Vector3();
+const parentQuat = new THREE.Quaternion();
+const uprightQuat = new THREE.Quaternion();
 
 // face: this type yaws toward the bow lantern. Later types omit it and stay frozen.
 // Add another entry here when a new obstacle model arrives.
@@ -137,13 +156,106 @@ function tuneObject(root) {
   });
 }
 
+function lampTint(item) {
+  const tint = { light: 0, glass: 0, intensity: 0, emissive: 0 };
+  if (!item || !item.lamp) return tint;
+  if (item.lampLight) {
+    tint.light = item.lampLight.color.getHex();
+    tint.intensity = item.lampLight.intensity;
+  }
+  item.lamp.traverse((obj) => {
+    if (!obj.isMesh || !obj.material || Array.isArray(obj.material)) return;
+    const glass = obj.name === 'Lantern_01_glass' || obj.material.name === 'Lantern_01_glass';
+    if (glass && obj.material.emissive) {
+      tint.glass = obj.material.emissive.getHex();
+      tint.emissive = obj.material.emissiveIntensity;
+    }
+  });
+  return tint;
+}
+
+// The prop socket follows the arm. Hang the lamp straight down from that
+// hand point, and cancel the arm tilt so it stays vertical in the world.
+function seatHandLamp(item) {
+  const parent = item.lamp && item.lamp.parent;
+  if (!parent) return;
+  parent.updateWorldMatrix(true, false);
+  parent.getWorldPosition(palmWorld);
+  palmWorld.y -= HAND_LAMP_HANG;
+  parent.worldToLocal(palmWorld);
+  item.lamp.position.copy(palmWorld);
+  parent.getWorldQuaternion(parentQuat);
+  uprightQuat.setFromAxisAngle(lampUp, item.group.rotation.y);
+  item.lamp.quaternion.copy(parentQuat).invert().multiply(uprightQuat);
+}
+
+function lampUpY(item) {
+  if (!item.lamp) return 1;
+  item.lamp.updateWorldMatrix(true, false);
+  item.lamp.getWorldQuaternion(parentQuat);
+  bonePos.set(0, 1, 0).applyQuaternion(parentQuat);
+  return bonePos.y;
+}
+
+function lampHang(item) {
+  if (!item.lamp || !item.lamp.parent) return 0;
+  item.lamp.parent.getWorldPosition(palmWorld);
+  item.lamp.getWorldPosition(bonePos);
+  return palmWorld.y - bonePos.y;
+}
+
+function tintHandLamp(root) {
+  root.traverse((obj) => {
+    if (!obj.isMesh || !obj.material) return;
+    const glass = obj.name === 'Lantern_01_glass' || obj.material.name === 'Lantern_01_glass';
+    if (!glass) return;
+    obj.material = obj.material.clone();
+    obj.material.color = new THREE.Color(HAND_LAMP_COLOR);
+    obj.material.emissive = new THREE.Color(HAND_LAMP_COLOR);
+    obj.material.emissiveIntensity = HAND_LAMP_EMISSIVE;
+    obj.material.depthWrite = true;
+  });
+}
+
 export function createObstacles(scene) {
   const loader = new GLTFLoader();
   const templates = new Map();
   const alive = [];
+  const handScale = new THREE.Vector3();
+  let handLamp = null;
   let arcadeOn = false;
   let nextZ = null;
   let rng = Math.random;
+
+  function attachHandLamp(item) {
+    if (!handLamp || item.type !== 'ghost_daughter' || item.lamp) return;
+    const hand = item.model.getObjectByName('r_arm_prop_env_37')
+      || item.model.getObjectByName('r_arm_wrist_jnt_17');
+    if (!hand) return;
+    item.group.updateWorldMatrix(true, true);
+    hand.getWorldScale(handScale);
+    const holder = new THREE.Group();
+    holder.add(handLamp.clone(true));
+    const light = new THREE.PointLight(HAND_LAMP_COLOR, HAND_LAMP_INTENSITY, 3.2, 2);
+    light.position.set(0, 0.0955, 0);
+    light.layers.set(GHOST_LAMP_LAYER);
+    holder.add(light);
+    holder.scale.setScalar(HAND_LAMP_SCALE / Math.max(Math.abs(handScale.x), 1e-4));
+    hand.add(holder);
+    item.model.traverse((obj) => {
+      if (obj.isMesh) obj.layers.enable(GHOST_LAMP_LAYER);
+    });
+    item.lamp = holder;
+    item.lampLight = light;
+    item.lampWorld = holder.scale.x * Math.abs(handScale.x);
+    seatHandLamp(item);
+  }
+
+  loader.load('/assets/lantern/Lantern_01_1k.gltf', (gltf) => {
+    handLamp = gltf.scene;
+    tintHandLamp(handLamp);
+    for (const item of alive) attachHandLamp(item);
+  });
 
   for (const type of TYPES) {
     loader.load(
@@ -209,9 +321,9 @@ export function createObstacles(scene) {
           action.play();
         }
       }
-      const spawnYaw = type.face ? rng() * Math.PI * 2 : 0;
+      const spawnYaw = rng() * Math.PI * 2;
       group.rotation.y = spawnYaw;
-      alive.push({
+      const item = {
         group,
         model,
         mixer,
@@ -222,7 +334,10 @@ export function createObstacles(scene) {
         faceYaw: template.faceYaw,
         spawnYaw,
         type: type.id,
-      });
+        lamp: null,
+      };
+      alive.push(item);
+      if (type.id === 'ghost_daughter') attachHandLamp(item);
       spawned += 1;
     }
     return spawned > 0;
@@ -292,6 +407,7 @@ export function createObstacles(scene) {
           }
           item.group.rotation.y = yaw;
         }
+        if (item.lamp) seatHandLamp(item);
         if (overlaps(boatPos, item)) hit = true;
       }
       return hit;
@@ -310,6 +426,8 @@ export function createObstacles(scene) {
         list.push({ z: Number(z), lanes: lanes.slice().sort() });
       }
       const first = alive[0];
+      const tint = lampTint(alive.find((item) => item.lamp));
+      const lit = alive.find((item) => item.lampLight);
       return {
         count: alive.length,
         packed,
@@ -317,12 +435,26 @@ export function createObstacles(scene) {
         clips: alive.filter((item) => item.mixer).length,
         animTime: first && first.mixer ? first.mixer.time : 0,
         faceYaw: first ? first.faceYaw : 0,
+        handLamps: alive.filter((item) => item.lamp).length,
+        ghosts: alive.filter((item) => item.type === 'ghost_daughter').length,
+        rocks: alive.filter((item) => item.type === 'rock').length,
+        lampWorld: (alive.find((item) => item.lamp) || {}).lampWorld || 0,
+        lampColor: tint.light,
+        lampGlass: tint.glass,
+        lampIntensity: tint.intensity,
+        lampEmissive: tint.emissive,
+        lampLayer: lit ? lit.lampLight.layers.mask : 0,
+        lampUpY: alive.reduce((min, item) => (item.lamp ? Math.min(min, lampUpY(item)) : min), 1),
+        lampHang: alive.reduce((min, item) => (item.lamp ? Math.min(min, lampHang(item)) : min), 1),
         placed: alive.map((item) => ({
           lane: item.lane,
           x: item.group.position.x,
           z: item.z,
           yaw: item.group.rotation.y,
           spawnYaw: item.spawnYaw,
+          faceYaw: item.faceYaw,
+          face: item.face,
+          hasLamp: !!item.lamp,
           type: item.type,
         })),
       };
