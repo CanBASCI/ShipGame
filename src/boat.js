@@ -23,9 +23,9 @@ const ARCADE_HEEL = 0.3;
 // A bend would return that stretch's heading instead of this constant.
 const DOWNSTREAM_YAW = 0;
 const YAW_LIMIT = Math.PI / 2;
-// Keel of the loaded hull is local y=-0.12. 0.084 is 4 cm under the old
-// flush seat, so the hull sits in the water without a big drop.
-const KEEL_RAISE = 0.084;
+// Keel of the loaded hull is local y=-0.12. Another 4 cm under the
+// previous seat, 8 cm under the original flush line.
+const KEEL_RAISE = 0.044;
 // One scale against the model's original beam. Length and height stay 1.
 const BEAM_NARROW = 0.75;
 // Nudge the hull forward of the follow point. The camera distance and height stay put.
