@@ -49,7 +49,7 @@ These files are stored in the repo and loaded by the scene.
 - License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
 - Source: https://sketchfab.com/3d-models/sea-part-e90b3547e64a4bbd825fd126760f1770
 - Files: `public/assets/water/sea_part/scene.gltf`, `public/assets/water/sea_part/scene.bin`
-- Use: the canal surface the boat rides on. The patch is widened to the canal and repeated along it. The crests sit on the waterline so the hull is not buried. The water keeps this model's Plane color: base about (0.00735, 0.00553, 0.01596), metal about 0.581, roughness about 0.069. Lantern reflections and the moon streak sit on that color.
+- Use: night water color taken from this model's Plane material — base about (0.00735, 0.00553, 0.01596), metal about 0.581, roughness about 0.069. The canal surface is still. Lantern reflections and the moon streak sit on that color.
 - This work is based on "Sea part" (https://sketchfab.com/3d-models/sea-part-e90b3547e64a4bbd825fd126760f1770) by Ayberk Tosunoglu (https://sketchfab.com/aybush) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
 
 ## Bamboo veneer
