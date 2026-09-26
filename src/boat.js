@@ -222,8 +222,9 @@ export function createBoat() {
   let captainModel = null;
   let captainMixer = null;
   let captainFit = null;
-  // Local yaw that aims the cloak's face down the boat (+Z).
-  const CAPTAIN_BOW_YAW = Math.PI;
+  // The cloak's face is local +X. Yaw -π/2 turns that axis down the boat (+Z).
+  // π pointed the face at starboard, which is what showed up on the first frame.
+  const CAPTAIN_BOW_YAW = -Math.PI / 2;
   let captainYaw = CAPTAIN_BOW_YAW;
   const captainWorld = new THREE.Vector3();
 
