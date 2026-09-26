@@ -1,8 +1,0 @@
-Model Information:
-* title:	Angel wings
-* source:	https://sketchfab.com/3d-models/angel-wings-a575b36467d840be84d8f91d5074d7d4
-* author:	sxnneh (https://sketchfab.com/Sxnneh)
-
-Model License:
-* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
-* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works
