@@ -437,6 +437,11 @@ export function createObstacles(scene) {
   let arcadeOn = false;
   let jumpClearance = 0;
   let jumpArmed = false;
+  let stickLift = 0;
+  let daughterLift = 0;
+  let bloodLift = 0;
+  let stoneLift = 0;
+  let posedTime = 0;
   let nextZ = null;
   let rng = Math.random;
 
@@ -543,6 +548,32 @@ export function createObstacles(scene) {
     if (Number.isFinite(strength)) ghostLamp.uStrength.value = strength;
     if (Number.isFinite(nextBloodLit)) bloodLamp.uStrength.value = nextBloodLit;
     setGlassPower(handLamp, handPower);
+  }
+
+  function liftFor(type) {
+    if (type === 'wood_stick') return stickLift;
+    if (type === 'ghost_daughter') return daughterLift;
+    if (type === 'ghost_blood') return bloodLift;
+    if (type === 'rock') return stoneLift;
+    return 0;
+  }
+
+  function seatY(item, x, t) {
+    const lift = liftFor(item.type);
+    if (item.span) return lift;
+    return waterY(x, item.z, t) + lift;
+  }
+
+  function setHeights(stick, daughter, blood, stone) {
+    if (Number.isFinite(stick)) stickLift = stick;
+    if (Number.isFinite(daughter)) daughterLift = daughter;
+    if (Number.isFinite(blood)) bloodLift = blood;
+    if (Number.isFinite(stone)) stoneLift = stone;
+    for (const item of alive) {
+      const x = item.span ? 0 : item.group.position.x;
+      item.group.position.y = seatY(item, x, posedTime);
+    }
+    publishGhostLamps();
   }
 
   loader.load('/assets/lantern/Lantern_01_1k.gltf', (gltf) => {
@@ -799,6 +830,7 @@ export function createObstacles(scene) {
         return false;
       }
       fill(boatPos.z);
+      posedTime = time;
       const step = Math.min(0.05, Math.max(0, dt || 0));
       let hit = false;
       for (let i = alive.length - 1; i >= 0; i -= 1) {
@@ -835,12 +867,12 @@ export function createObstacles(scene) {
         }
         if (item.span) {
           // The visible river crests at y=0. The sine offset sits above that surface.
-          item.group.position.set(0, 0, item.z);
+          item.group.position.set(0, seatY(item, 0, time), item.z);
           item.group.rotation.set(0, item.alignYaw, 0);
           if (jumpArmed && logGap(boatPos, item) <= LOG_JUMP_GAP && item.z - boatPos.z > -HIT_BEHIND) {
             item.cleared = true;
           }
-        } else item.group.position.set(x, waterY(x, item.z, time), item.z);
+        } else item.group.position.set(x, seatY(item, x, time), item.z);
         if (item.type === 'ghost_blood') {
           item.fade = opacity;
           item.group.visible = paintFade(item.fadeMats, opacity);
@@ -868,6 +900,7 @@ export function createObstacles(scene) {
       return hit;
     },
     setHandTune,
+    setHeights,
     sample() {
       const rows = new Map();
       for (const item of alive) {

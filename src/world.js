@@ -578,6 +578,7 @@ export function createWorld(scene) {
       treeLight.value = next.tree;
       mist.uniforms.uFogOn.value = next.fog ? 1 : 0;
       obstacles.setHandTune(next.lampPower, next.ghostLit, next.bloodLit);
+      obstacles.setHeights(next.stick, next.daughter, next.blood, next.stone);
     },
     setArcade,
     whiteBambooAhead,

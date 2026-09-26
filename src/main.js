@@ -110,7 +110,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.03 };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false, lampPower: 4, ghostLit: 0.2, bloodLit: 0.03, stick: 0, daughter: 0, blood: 0, stone: 0 };
 world.setTune(tune);
 
 function dayAmount() {
@@ -191,18 +191,8 @@ function updateCamera(dt, jump) {
   camera.lookAt(lookAt);
 }
 
-function update(dt) {
-  if (paused) return;
+function paintLights() {
   const day = dayAmount();
-  time += dt;
-  boat.update(dt, time, inputState(day));
-  world.setObstacleJump(tune.arcade ? boat.jumpLift() : 0, tune.arcade && boat.jumpArmed());
-  if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
-
-  bowHold.copy(boat.lanternPosition());
-  world.update(boat.group.position, time, day, boat.state.yaw, bowHold, dt);
-  boat.faceCaptain(dt, tune.arcade ? world.whiteBambooAhead(boat.group.position, boat.state.yaw) : null);
-  if (tune.arcade && !arcadeOver && world.takeObstacleHit()) endRun(true);
   boat.headlight.getWorldPosition(headPos);
   boat.headlight.target.getWorldPosition(headAim);
   headAim.sub(headPos);
@@ -281,7 +271,21 @@ function update(dt) {
   moon.intensity = THREE.MathUtils.lerp(0.04, 0.26, day);
   moon.color.set(0x6e6290).lerp(new THREE.Color(0xffd2b0), day);
   renderer.toneMappingExposure = 0.74 + day * 0.2;
+}
 
+function update(dt) {
+  if (paused) return;
+  const day = dayAmount();
+  time += dt;
+  boat.update(dt, time, inputState(day));
+  world.setObstacleJump(tune.arcade ? boat.jumpLift() : 0, tune.arcade && boat.jumpArmed());
+  if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
+
+  bowHold.copy(boat.lanternPosition());
+  world.update(boat.group.position, time, day, boat.state.yaw, bowHold, dt);
+  boat.faceCaptain(dt, tune.arcade ? world.whiteBambooAhead(boat.group.position, boat.state.yaw) : null);
+  if (tune.arcade && !arcadeOver && world.takeObstacleHit()) endRun(true);
+  paintLights();
   updateCamera(dt, false);
 }
 
@@ -315,9 +319,9 @@ window.addEventListener('error', (event) => {
 });
 
 const TUNE_STEP = 1.1;
-const TUNE_MIN = { ghostLit: 0.05, bloodLit: 0 };
-const TUNE_MAX = { ghostLit: 8, bloodLit: 8 };
-const FINE_TUNE = new Set(['bloodLit']);
+const TUNE_MIN = { ghostLit: 0.05, bloodLit: 0, stick: -4, daughter: -4, blood: -4, stone: -4 };
+const TUNE_MAX = { ghostLit: 8, bloodLit: 8, stick: 4, daughter: 4, blood: 4, stone: 4 };
+const FINE_TUNE = new Set(['bloodLit', 'stick', 'daughter', 'blood', 'stone']);
 const FINE_STEP = 0.01;
 const fogToggle = document.getElementById('fog-toggle');
 const arcadeToggle = document.getElementById('arcade-toggle');
@@ -345,6 +349,7 @@ function paintTune() {
 
 function applyTune() {
   world.setTune(tune);
+  paintLights();
   paintTune();
 }
 
