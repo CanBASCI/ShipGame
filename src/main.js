@@ -9,6 +9,7 @@ import { createWorld } from './world.js';
 
 const canvas = document.getElementById('c');
 const hint = document.getElementById('hint');
+const overEl = document.getElementById('over');
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
@@ -85,6 +86,13 @@ const right = new THREE.Vector3();
 const up = new THREE.Vector3(0, 1, 0);
 const reflectionScratch = [];
 const boatLanternColor = new THREE.Color(0xffb45a);
+const bowHold = new THREE.Vector3();
+let arcadeOver = false;
+
+function endRun(on) {
+  arcadeOver = !!on;
+  overEl.classList.toggle('show', arcadeOver);
+}
 
 function hideHint() {
   if (hintHidden) return;
@@ -108,6 +116,7 @@ function inputState(day) {
     turnRight: keys.has('KeyD') || keys.has('ArrowRight'),
     day,
     arcade: tune.arcade,
+    arcadeOver: tune.arcade && arcadeOver,
   };
 }
 
@@ -123,6 +132,13 @@ window.addEventListener('keydown', (event) => {
   if (event.repeat) return;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
     event.preventDefault();
+  }
+  if (event.code === 'Space' && arcadeOver && tune.arcade) {
+    keys.clear();
+    boat.reset();
+    world.setArcade(true);
+    endRun(false);
+    return;
   }
   pressCode(event.code);
 });
@@ -173,7 +189,9 @@ function update(dt) {
   boat.update(dt, time, inputState(day));
   if (Math.abs(boat.state.speed) > 0.05 || Math.abs(boat.state.yaw) > 0.02) hideHint();
 
-  world.update(boat.group.position, time, day, boat.state.yaw);
+  bowHold.copy(boat.lanternPosition());
+  world.update(boat.group.position, time, day, boat.state.yaw, bowHold, dt);
+  if (tune.arcade && !arcadeOver && world.takeObstacleHit()) endRun(true);
   boat.headlight.getWorldPosition(headPos);
   boat.headlight.target.getWorldPosition(headAim);
   headAim.sub(headPos);
@@ -198,6 +216,7 @@ function update(dt) {
   water.uniforms.uHeadDir.value.copy(headAim);
   water.uniforms.uHead.value = headAmt;
   water.uniforms.uHeadSpread.value = headSpread;
+  world.setObstacleBeam(headPos, headAim, headAmt, headSpread);
   scene.fog.color.copy(fogNight).lerp(fogDay, day);
   scene.fog.density = world.fogDensity.value;
   world.fogColor.copy(scene.fog.color);
@@ -329,6 +348,7 @@ arcadeToggle.addEventListener('click', () => {
   tune.arcade = !tune.arcade;
   arcadeToggle.setAttribute('aria-pressed', String(tune.arcade));
   world.setArcade(tune.arcade);
+  endRun(false);
 });
 
 document.getElementById('tune').addEventListener('click', (event) => {
@@ -378,6 +398,7 @@ window.__ship = {
   reset() {
     keys.clear();
     boat.reset();
+    endRun(false);
     world.setArcade(tune.arcade);
     hintHidden = false;
     hint.classList.remove('hide');
@@ -419,6 +440,7 @@ window.__ship = {
         };
       })(),
       hint: hint.textContent,
+      obstacles: world.obstacleSample(),
     };
   },
 };

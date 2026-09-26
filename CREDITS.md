@@ -97,6 +97,15 @@ These files are stored in the repo and loaded by the scene.
 - Files: `public/assets/fog/mist-a.png`, `public/assets/fog/mist-b.png`, `public/assets/fog/mist-c.png`
 - Use: the night distance mist. These are `FX_CloudAlpha02`, `FX_CloudAlpha04`, and `FX_CloudAlpha07` from WickedInsignia's "Clouds with Transparency", resized to 1024. Wide overlapping cards sit in the world across the canal and both banks. The mist stays clear by the boat, fades in farther ahead, and keeps going down the canal. Moonlight and the bow lantern are what show it.
 
+## Ghost Daughter
+
+- Author: LostBoyz2078 (https://sketchfab.com/LostModels2025)
+- License: CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
+- Source: https://sketchfab.com/3d-models/ghost-daughter-89850ac12e0f468582d4d0dcebd4efbc
+- Files: `public/assets/obstacles/ghost_daughter/scene.gltf`, `scene.bin`, `license.txt`, and `textures/`
+- Use: the first Arcade obstacle. Copies stand on the water in the lanes ahead of the boat, play the model's own clip in place, and turn to face the bow lantern. Arcade off does not show them.
+- This work is based on "Ghost Daughter" (https://sketchfab.com/3d-models/ghost-daughter-89850ac12e0f468582d4d0dcebd4efbc) by LostBoyz2078 (https://sketchfab.com/LostModels2025) licensed under CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/).
+
 ## Bamboo lantern
 
 - File: `public/assets/lantern/bamboo_lantern.glb`

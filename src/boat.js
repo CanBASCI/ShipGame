@@ -473,6 +473,14 @@ export function createBoat() {
   function update(dt, time, input) {
     hideOars = !!input.arcade;
     if (input.arcade) {
+      if (input.arcadeOver) {
+        state.speed = 0;
+        state.yawRate = 0;
+        settleOnWater(time, input, true);
+        applyOars();
+        applyStern();
+        return;
+      }
       updateArcade(dt, time, input);
       applyOars();
       applyStern();

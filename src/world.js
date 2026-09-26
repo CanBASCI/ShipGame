@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createObstacles } from './obstacles.js';
 
 const CHUNK = 42;
 const KEEP_BEHIND = 1;
@@ -197,6 +198,7 @@ export function createWorld(scene) {
   }
 
   let arcadeOn = false;
+  const obstacles = createObstacles(scene);
 
   // The old four-color roll. Only the white result stays in Arcade.
   function arcadeWhite(index, spec) {
@@ -219,6 +221,7 @@ export function createWorld(scene) {
   function setArcade(on) {
     arcadeOn = !!on;
     for (const L of lanterns) applyPresence(L);
+    obstacles.setArcade(arcadeOn);
   }
 
   function lanternPlan(index, rng) {
@@ -413,7 +416,9 @@ export function createWorld(scene) {
   scene.add(sky.mesh);
   const mist = createMist();
 
-  function update(boatPos, time, day, yaw = 0) {
+  let obstacleHit = false;
+
+  function update(boatPos, time, day, yaw = 0, bow = null, dt = 0) {
     dayUniform.value = day;
     fogDensity.value = THREE.MathUtils.lerp(0.02, 0.015, day);
 
@@ -446,6 +451,7 @@ export function createWorld(scene) {
     mist.uniforms.uFwd.value.set(fx, 0, fz);
     mist.uniforms.uBow.value.set(boatPos.x + fx * bowAhead, boatPos.y + 0.5, boatPos.z + fz * bowAhead);
     mist.uniforms.uMoon.value.set(0, 9.2, boatPos.z + 30);
+    obstacleHit = obstacles.update(boatPos, time, dt, bow) === true;
   }
 
   const lightPose = { day: 0, yaw: 0, pos: new THREE.Vector3() };
@@ -550,6 +556,15 @@ export function createWorld(scene) {
       mist.uniforms.uFogOn.value = next.fog ? 1 : 0;
     },
     setArcade,
+    takeObstacleHit() {
+      return obstacleHit;
+    },
+    setObstacleBeam(pos, dir, amount, spread) {
+      obstacles.setBeam(pos, dir, amount, spread);
+    },
+    obstacleSample() {
+      return obstacles.sample();
+    },
   };
 }
 
