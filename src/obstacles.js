@@ -149,17 +149,15 @@ const TYPES = [
   // fitAcross is the widest horizontal side, so the rock stays in one lane.
   // 2.25 is 125% of the previous 1.8 fit. Ghosts and the log are unchanged.
   { id: 'rock', url: '/assets/obstacles/rock/scene.gltf', face: false, fitAcross: 2.25 },
-  // One log across every lane. 8.0325 is 5% over the 7.65 fit, which was already
-  // 75% of the first oversized size. Bark stays intact, a little water remains
-  // at each bank, and the three lanes are still covered.
-  { id: 'tree_debris_01', url: '/assets/obstacles/tree_debris_01/tree_debris_01.glb', face: false, fitAcross: 8.0325, span: true },
 ];
-// ArrowUp within this gap in front of the log commits the flight across it.
+// ArrowUp within this gap in front of the span commits the flight across it.
 const LOG_JUMP_GAP = 2;
-// Roll about the length (X). The face that pointed along the river, toward the
-// boat, becomes the top. Cut ends stay on the left and right.
-const LOG_ROLL = Math.PI / 2;
-// About one row in six is a log, and that row has nothing else.
+// The log's footprint. The rejected flame mesh stays hidden. A PNG flipbook
+// can fill this strip later; until then the row is only the block.
+const FIRE_ACROSS = 8.0325;
+const FIRE_DEPTH = 0.6345457138259109;
+const FIRE_HEIGHT = 0.4959853588395967;
+// About one row in six is this span, and that row has nothing else.
 const LOG_ROW = 0.16;
 
 // Shared bow-flashlight term. The real SpotLight is too weak at approach
@@ -563,47 +561,26 @@ export function createObstacles(scene) {
     nextZ = null;
   }
 
-  function spawnSpan(z, type) {
-    const template = templates.get(type.id);
-    if (!template) return false;
+  function spawnSpan(z) {
     const group = new THREE.Group();
-    const model = cloneSkeleton(template.scene);
-    model.scale.setScalar(template.scale);
-    model.rotation.set(LOG_ROLL, 0, 0);
-    model.position.set(0, 0, 0);
-    model.traverse((obj) => {
-      obj.frustumCulled = false;
-    });
-    group.add(model);
-    group.updateMatrixWorld(true);
-    const rolled = new THREE.Box3().setFromObject(model);
-    const rolledCenter = rolled.getCenter(new THREE.Vector3());
-    const rolledSize = rolled.getSize(new THREE.Vector3());
-    // Seat the new bottom on y=0 and keep the length centered across the lanes.
-    model.position.set(-rolledCenter.x, -rolled.min.y, -rolledCenter.z);
     group.position.set(0, 0, z);
-    group.rotation.y = template.alignYaw;
     scene.add(group);
     alive.push({
       group,
-      model,
+      model: null,
       mixer: null,
       lane: 1,
       z,
-      foot: -rolled.min.y,
-      centerX: -rolledCenter.x,
-      centerZ: -rolledCenter.z,
-      rollX: LOG_ROLL,
-      alignYaw: template.alignYaw,
+      foot: 0,
       face: false,
       faceYaw: 0,
-      spawnYaw: template.alignYaw,
+      spawnYaw: 0,
       fadeMats: null,
       fade: 1,
-      worldHeight: rolledSize.y,
-      worldAcross: rolledSize.x,
-      worldDepth: rolledSize.z,
-      type: type.id,
+      worldHeight: FIRE_HEIGHT,
+      worldAcross: FIRE_ACROSS,
+      worldDepth: FIRE_DEPTH,
+      type: 'fire',
       span: true,
       lamp: null,
     });
@@ -611,8 +588,7 @@ export function createObstacles(scene) {
   }
 
   function spawnRow(z) {
-    const log = TYPES.find((type) => type.span);
-    if (log && rng() < LOG_ROW) return spawnSpan(z, log);
+    if (rng() < LOG_ROW) return spawnSpan(z);
     const lanes = chooseLanes(rng);
     const made = [];
     let spawned = 0;
@@ -770,10 +746,7 @@ export function createObstacles(scene) {
         if (item.mixer) item.mixer.update(step);
         // The clip moves bones only. Yaw stays on the parent. Chosen blood
         // ghosts flicker into an empty lane; the rest keep theirs.
-        if (item.span) {
-          item.model.position.set(item.centerX, item.foot, item.centerZ);
-          item.model.rotation.set(item.rollX || 0, 0, 0);
-        } else {
+        if (!item.span) {
           item.model.position.set(0, item.foot, 0);
           item.model.rotation.set(0, 0, 0);
         }
@@ -795,7 +768,7 @@ export function createObstacles(scene) {
         if (item.span) {
           // The visible river crests at y=0. The sine offset sits above that surface.
           item.group.position.set(0, 0, item.z);
-          item.group.rotation.set(0, item.alignYaw, 0);
+          item.group.rotation.set(0, 0, 0);
           if (jumpArmed && logGap(boatPos, item) <= LOG_JUMP_GAP && item.z - boatPos.z > -HIT_BEHIND) {
             item.cleared = true;
           }
