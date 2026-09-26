@@ -93,7 +93,7 @@ function hideHint() {
 }
 
 let dayHold = 0;
-const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5 };
+const tune = { fog: true, bamboo: 0.3, bambooOn: true, water: 0.5, tree: 1.5, fener: 0.6, spread: 0.3, ay: 0.5, arcade: false };
 world.setTune(tune);
 
 function dayAmount() {
@@ -107,6 +107,7 @@ function inputState(day) {
     turnLeft: keys.has('KeyA') || keys.has('ArrowLeft'),
     turnRight: keys.has('KeyD') || keys.has('ArrowRight'),
     day,
+    arcade: tune.arcade,
   };
 }
 
@@ -276,6 +277,7 @@ window.addEventListener('error', (event) => {
 
 const TUNE_STEP = 1.1;
 const fogToggle = document.getElementById('fog-toggle');
+const arcadeToggle = document.getElementById('arcade-toggle');
 const bambooToggle = document.getElementById('bamboo-toggle');
 const boatSwitch = document.getElementById('boat-switch');
 const daySlider = document.getElementById('day-slider');
@@ -313,6 +315,11 @@ fogToggle.addEventListener('click', () => {
   tune.fog = !tune.fog;
   fogToggle.setAttribute('aria-pressed', String(tune.fog));
   applyTune();
+});
+
+arcadeToggle.addEventListener('click', () => {
+  tune.arcade = !tune.arcade;
+  arcadeToggle.setAttribute('aria-pressed', String(tune.arcade));
 });
 
 document.getElementById('tune').addEventListener('click', (event) => {

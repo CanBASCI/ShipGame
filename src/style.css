@@ -80,7 +80,8 @@ html, body {
   opacity: 0.5;
 }
 
-#fog-toggle {
+#fog-toggle,
+#arcade-toggle {
   padding: 4px 8px;
 }
 
@@ -99,8 +100,14 @@ html, body {
   opacity: 0.45;
 }
 
-#fog-toggle[aria-pressed="false"] {
+#fog-toggle[aria-pressed="false"],
+#arcade-toggle[aria-pressed="false"] {
   opacity: 0.45;
+}
+
+#arcade-toggle[aria-pressed="true"] {
+  background: rgba(226, 214, 204, 0.16);
+  border-color: rgba(226, 214, 204, 0.72);
 }
 
 .tune-row {

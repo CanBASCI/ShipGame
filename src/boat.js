@@ -9,6 +9,13 @@ const BRAKE_DRAG = 2.5;
 const TURN_RATE = 0.28;
 const TURN_EASE = 2.1;
 const BANK = 4.72;
+// Arcade keeps the hull inside the canal. +X is the player's left.
+// Side lanes sit in toward the water edges. The middle lane stays on center.
+const ARCADE_CRUISE = 1.15;
+const LANE_OFFSET = 3.4;
+const LANES = [-LANE_OFFSET, 0, LANE_OFFSET];
+const LANE_EASE = 7;
+const ARCADE_YAW = 0.18;
 // The canal is a straight run on +Z, so downstream is world yaw 0.
 // A bend would return that stretch's heading instead of this constant.
 const DOWNSTREAM_YAW = 0;
@@ -277,6 +284,95 @@ export function createBoat() {
   let sequenceSide = 'left';
   let sequenceWait = 0;
   let braking = false;
+  let arcadeLane = 1;
+  let arcadeLaneArmed = false;
+  let prevArcadeLeft = false;
+  let prevArcadeRight = false;
+
+  function nearestArcadeLane(x) {
+    let best = 1;
+    let bestD = Infinity;
+    for (let i = 0; i < LANES.length; i += 1) {
+      const d = Math.abs(x - LANES[i]);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  function settleOnWater(time, input, headOn) {
+    const yC = waterY(state.x, state.z, time);
+    const fwd = 0.85;
+    const yF = waterY(state.x + Math.sin(state.yaw) * fwd, state.z + Math.cos(state.yaw) * fwd, time);
+    const yB = waterY(state.x - Math.sin(state.yaw) * fwd, state.z - Math.cos(state.yaw) * fwd, time);
+    const side = 0.38;
+    const rx = Math.cos(state.yaw);
+    const rz = -Math.sin(state.yaw);
+    const yR = waterY(state.x + rx * side, state.z + rz * side, time);
+    const yL = waterY(state.x - rx * side, state.z - rz * side, time);
+
+    group.position.set(state.x, yC + KEEL_RAISE, state.z);
+    group.rotation.y = state.yaw;
+    group.rotation.x = -(yF - yB) * 0.55 + Math.sin(time * 0.45) * 0.01;
+    group.rotation.z = (yR - yL) * 0.7 + Math.sin(time * 0.33 + 1.0) * 0.012;
+
+    poseOar(oarL, 'left', time);
+    poseOar(oarR, 'right', time);
+    poseOar(donnOarL, 'left', time);
+    poseOar(donnOarR, 'right', time);
+
+    const flicker = 1 + Math.sin(time * 2.3) * 0.03 + Math.sin(time * 5.1) * 0.015;
+    const level = (5.0625 - input.day * 2.25) * flicker;
+    lantern.light.intensity = level * lantern.bright;
+    for (const lamp of sternLamps) lamp.light.intensity = lamp.light.visible ? level * lamp.bright : 0;
+    headlight.intensity = headOn ? 42 : 0;
+    const glow = (1.35 - input.day * 0.45) * flicker;
+    for (const mat of lantern.glowMats) mat.emissiveIntensity = glow * lantern.bright;
+    for (const lamp of sternLamps) {
+      for (const mat of lamp.glowMats) mat.emissiveIntensity = lamp.light.visible ? glow * lamp.bright : 0;
+    }
+  }
+
+  function updateArcade(dt, time, input) {
+    braking = false;
+    sequenceWait = Math.max(0, sequenceWait - dt);
+    if (!arcadeLaneArmed) {
+      arcadeLane = nearestArcadeLane(state.x);
+      prevArcadeLeft = !!input.turnLeft;
+      prevArcadeRight = !!input.turnRight;
+      arcadeLaneArmed = true;
+      state.yawRate = 0;
+    }
+    const left = !!input.turnLeft;
+    const right = !!input.turnRight;
+    if (left && !prevArcadeLeft && !right) arcadeLane = Math.min(LANES.length - 1, arcadeLane + 1);
+    else if (right && !prevArcadeRight && !left) arcadeLane = Math.max(0, arcadeLane - 1);
+    prevArcadeLeft = left;
+    prevArcadeRight = right;
+
+    for (const side of ['left', 'right']) {
+      cooldown[side] = Math.max(0, cooldown[side] - dt);
+      if (strokeT[side] >= 0) {
+        strokeT[side] += dt;
+        if (strokeT[side] > OAR_INTERVAL) strokeT[side] = -1;
+      }
+    }
+
+    const settle = 1 - Math.exp(-1.6 * dt);
+    state.speed += (ARCADE_CRUISE - state.speed) * settle;
+    if (state.speed < 0) state.speed = 0;
+
+    const targetX = LANES[arcadeLane];
+    const ease = 1 - Math.exp(-LANE_EASE * dt);
+    state.x += (targetX - state.x) * ease;
+    state.z += state.speed * dt;
+    const lean = clamp((targetX - state.x) / LANE_OFFSET, -1, 1) * ARCADE_YAW;
+    state.yaw += (lean - state.yaw) * ease;
+    state.yawRate = 0;
+    settleOnWater(time, input, true);
+  }
 
   function beginStroke(side) {
     strokeT[side] = 0;
@@ -322,6 +418,11 @@ export function createBoat() {
   }
 
   function update(dt, time, input) {
+    if (input.arcade) {
+      updateArcade(dt, time, input);
+      return;
+    }
+    arcadeLaneArmed = false;
     braking = !!input.brake;
     sequenceWait = Math.max(0, sequenceWait - dt);
 
@@ -409,36 +510,7 @@ export function createBoat() {
       }
     }
 
-    const yC = waterY(state.x, state.z, time);
-    const fwd = 0.85;
-    const yF = waterY(state.x + Math.sin(state.yaw) * fwd, state.z + Math.cos(state.yaw) * fwd, time);
-    const yB = waterY(state.x - Math.sin(state.yaw) * fwd, state.z - Math.cos(state.yaw) * fwd, time);
-    const side = 0.38;
-    const rx = Math.cos(state.yaw);
-    const rz = -Math.sin(state.yaw);
-    const yR = waterY(state.x + rx * side, state.z + rz * side, time);
-    const yL = waterY(state.x - rx * side, state.z - rz * side, time);
-
-    group.position.set(state.x, yC + KEEL_RAISE, state.z);
-    group.rotation.y = state.yaw;
-    group.rotation.x = -(yF - yB) * 0.55 + Math.sin(time * 0.45) * 0.01;
-    group.rotation.z = (yR - yL) * 0.7 + Math.sin(time * 0.33 + 1.0) * 0.012;
-
-    poseOar(oarL, 'left', time);
-    poseOar(oarR, 'right', time);
-    poseOar(donnOarL, 'left', time);
-    poseOar(donnOarR, 'right', time);
-
-    const flicker = 1 + Math.sin(time * 2.3) * 0.03 + Math.sin(time * 5.1) * 0.015;
-    const level = (5.0625 - input.day * 2.25) * flicker;
-    lantern.light.intensity = level * lantern.bright;
-    for (const lamp of sternLamps) lamp.light.intensity = lamp.light.visible ? level * lamp.bright : 0;
-    headlight.intensity = input.forward ? 42 : 0;
-    const glow = (1.35 - input.day * 0.45) * flicker;
-    for (const mat of lantern.glowMats) mat.emissiveIntensity = glow * lantern.bright;
-    for (const lamp of sternLamps) {
-      for (const mat of lamp.glowMats) mat.emissiveIntensity = lamp.light.visible ? glow * lamp.bright : 0;
-    }
+    settleOnWater(time, input, !!input.forward);
   }
 
   const lanternWorld = new THREE.Vector3();
@@ -475,6 +547,10 @@ export function createBoat() {
     sequenceSide = 'left';
     sequenceWait = 0;
     braking = false;
+    arcadeLane = 1;
+    arcadeLaneArmed = false;
+    prevArcadeLeft = false;
+    prevArcadeRight = false;
     group.position.set(0, 0, 0);
     group.rotation.set(0, 0, 0);
   }
