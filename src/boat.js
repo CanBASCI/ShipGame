@@ -211,9 +211,10 @@ export function createBoat() {
   let hullName = 'donnichols';
   let lampModel = null;
   // Sitting boards measured from the upward faces of each hull. The captain's
-  // hem rests on that top, centered on the board.
+  // hem rests on that top, centered on the board. On Donnichols that board is
+  // the rear thwart, aft of the middle seat.
   const CAPTAIN_SEATS = {
-    donnichols: { x: 0, y: 0.126, z: 0.245 },
+    donnichols: { x: 0, y: 0.126, z: -0.741 },
     mevcut: { x: 0, y: 0.293, z: -0.225 },
   };
   const captainRoot = new THREE.Group();
