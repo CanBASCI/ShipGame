@@ -25,6 +25,8 @@ const LOOK_DONE = 8;
 // Add another entry here when a new obstacle model arrives.
 const TYPES = [
   { id: 'ghost_daughter', url: '/assets/obstacles/ghost_daughter/scene.gltf', face: true },
+  // fitAcross is the widest horizontal side, so the rock stays in one lane.
+  { id: 'rock', url: '/assets/obstacles/rock/scene.gltf', face: false, fitAcross: 1.8 },
 ];
 
 // Shared bow-flashlight term. The real SpotLight is too weak at approach
@@ -67,8 +69,12 @@ function pickType(rng) {
 function tuneMaterial(mat) {
   if (!mat || !mat.isMaterial || mat.userData.bowLit) return;
   mat.userData.bowLit = true;
-  mat.metalness = 0;
-  mat.roughness = 0.62;
+  // Ghost materials omit metalness and arrive fully metal, which stays black.
+  // A rock that already has a rough factor keeps its own surface.
+  if (mat.metalness > 0.5) {
+    mat.metalness = 0;
+    mat.roughness = 0.62;
+  }
   mat.envMapIntensity = 0;
   mat.depthWrite = true;
   mat.onBeforeCompile = (shader) => {
@@ -146,11 +152,13 @@ export function createObstacles(scene) {
         const root = gltf.scene;
         root.updateWorldMatrix(true, true);
         const box = new THREE.Box3().setFromObject(root);
-        const height = Math.max(0.001, box.max.y - box.min.y);
+        const size = box.getSize(new THREE.Vector3());
+        const height = Math.max(0.001, size.y);
+        const across = Math.max(size.x, size.z, 0.001);
         tuneObject(root);
         templates.set(type.id, {
           scene: root,
-          scale: TARGET_HEIGHT / height,
+          scale: type.fitAcross ? type.fitAcross / across : TARGET_HEIGHT / height,
           foot: box.min.y,
           clips: gltf.animations || [],
           faceYaw: faceHeading(root),
@@ -176,11 +184,12 @@ export function createObstacles(scene) {
   }
 
   function spawnRow(z) {
-    const type = pickType(rng);
-    const template = templates.get(type.id);
-    if (!template) return false;
     const lanes = chooseLanes(rng);
+    let spawned = 0;
     for (const lane of lanes) {
+      const type = pickType(rng);
+      const template = templates.get(type.id);
+      if (!template) continue;
       const group = new THREE.Group();
       const model = cloneSkeleton(template.scene);
       model.scale.setScalar(template.scale);
@@ -192,7 +201,7 @@ export function createObstacles(scene) {
       group.position.set(LANES[lane], 0, z);
       scene.add(group);
       let mixer = null;
-      if (template.clips.length) {
+      if (template.clips.length && type.face) {
         mixer = new THREE.AnimationMixer(model);
         for (const clip of template.clips) {
           const action = mixer.clipAction(clip);
@@ -200,7 +209,7 @@ export function createObstacles(scene) {
           action.play();
         }
       }
-      const spawnYaw = rng() * Math.PI * 2;
+      const spawnYaw = type.face ? rng() * Math.PI * 2 : 0;
       group.rotation.y = spawnYaw;
       alive.push({
         group,
@@ -214,8 +223,9 @@ export function createObstacles(scene) {
         spawnYaw,
         type: type.id,
       });
+      spawned += 1;
     }
-    return true;
+    return spawned > 0;
   }
 
   function fill(boatZ) {
