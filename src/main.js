@@ -198,6 +198,7 @@ function update(dt) {
 
   bowHold.copy(boat.lanternPosition());
   world.update(boat.group.position, time, day, boat.state.yaw, bowHold, dt);
+  boat.faceCaptain(dt, tune.arcade ? world.whiteBambooAhead(boat.group.position, boat.state.yaw) : null);
   if (tune.arcade && !arcadeOver && world.takeObstacleHit()) endRun(true);
   boat.headlight.getWorldPosition(headPos);
   boat.headlight.target.getWorldPosition(headAim);
@@ -237,13 +238,15 @@ function update(dt) {
 
   reflectionScratch.length = 0;
   boatLanternColor.set(0xffb45a).lerp(new THREE.Color(0xffc48a), day * 0.3);
+  // Arcade only: the boat lamps' water patches are a quarter dimmer.
+  // The lamps themselves, the bow flashlight, and bamboo streaks stay put.
+  const boatReflect = tune.arcade ? 0.75 : 1;
   for (const lamp of boat.lanternLights()) {
-    if (tune.arcade && lamp.stern) continue;
     const color = boatLanternColor.clone();
     reflectionScratch.push({
       pos: lamp.pos,
       color,
-      gain: 1.51875 * lamp.bright,
+      gain: 1.51875 * lamp.bright * boatReflect,
       tight: 0.9,
       patch: true,
     });
@@ -435,6 +438,25 @@ window.__ship = {
   },
   captain() {
     return boat.captainSample();
+  },
+  stern() {
+    return boat.sternSample();
+  },
+  bambooAhead() {
+    return world.whiteBambooAhead(boat.group.position, boat.state.yaw);
+  },
+  reflectGains() {
+    const gain = water.uniforms.uGain.value;
+    const patch = water.uniforms.uPatch.value;
+    const boat = [];
+    const other = [];
+    for (let i = 0; i < gain.length; i += 1) {
+      if (gain[i] < 0.001) continue;
+      const row = { gain: gain[i], patch: patch[i] };
+      if (patch[i] === 1) boat.push(row.gain);
+      else other.push(row);
+    }
+    return { boat, other, head: water.uniforms.uHead.value };
   },
   state() {
     const ahead = boat.group.position.clone();

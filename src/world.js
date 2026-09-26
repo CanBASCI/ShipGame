@@ -516,6 +516,29 @@ export function createWorld(scene) {
     return ahead;
   }
 
+  // Nearest Arcade white bamboo still in front of the boat. Null when none
+  // are showing ahead, and null outside Arcade.
+  function whiteBambooAhead(boatPos, yaw = 0) {
+    if (!arcadeOn) return null;
+    const fx = Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    let best = null;
+    let bestD = Infinity;
+    for (const L of lanterns) {
+      if (!L.arcadeShown || !L.model.visible) continue;
+      const dx = L.pos.x - boatPos.x;
+      const dz = L.pos.z - boatPos.z;
+      if (dx * fx + dz * fz <= 0) continue;
+      const d = dx * dx + dz * dz;
+      if (d < bestD) {
+        bestD = d;
+        best = L.pos;
+      }
+    }
+    if (!best) return null;
+    return { x: best.x, z: best.z };
+  }
+
   // Lanterns within 12m of the boat stay at full strength. Past that, each
   // further 8m is one small step down. The scale never reaches zero.
   function lanternReach(dist) {
@@ -557,6 +580,7 @@ export function createWorld(scene) {
       obstacles.setHandTune(next.lampPower, next.ghostLit, next.bloodLit);
     },
     setArcade,
+    whiteBambooAhead,
     takeObstacleHit() {
       return obstacleHit;
     },

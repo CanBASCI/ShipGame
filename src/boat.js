@@ -219,8 +219,13 @@ export function createBoat() {
   };
   const captainRoot = new THREE.Group();
   body.add(captainRoot);
+  let captainModel = null;
   let captainMixer = null;
   let captainFit = null;
+  // Local yaw that aims the cloak's face down the boat (+Z).
+  const CAPTAIN_BOW_YAW = Math.PI;
+  let captainYaw = CAPTAIN_BOW_YAW;
+  const captainWorld = new THREE.Vector3();
 
   function boundsIn(ancestor, object) {
     const box = new THREE.Box3();
@@ -245,19 +250,15 @@ export function createBoat() {
   }
 
   function placeCaptain() {
-    if (!captainFit) return;
+    if (!captainFit || !captainModel) return;
     const seat = CAPTAIN_SEATS[hullName];
-    // The export faces -Z. The bow is +Z, so turn the captain toward the bow.
-    captainRoot.rotation.y = Math.PI;
-    const scale = captainFit.scale;
-    captainRoot.scale.setScalar(scale);
-    const cx = captainFit.center.x;
-    const cz = captainFit.center.z;
-    captainRoot.position.set(
-      seat.x + cx * scale,
-      seat.y - captainFit.min.y * scale,
-      seat.z + cz * scale,
-    );
+    // The cloak's footprint center and hem sit on the root. Yaw spins that
+    // point, so a turn toward a lantern cannot walk the captain off the bench.
+    captainModel.position.set(-captainFit.center.x, -captainFit.min.y, -captainFit.center.z);
+    captainRoot.scale.setScalar(captainFit.scale);
+    captainRoot.position.set(seat.x, seat.y, seat.z);
+    captainRoot.rotation.y = CAPTAIN_BOW_YAW;
+    captainYaw = CAPTAIN_BOW_YAW;
   }
 
   new GLTFLoader().load('/assets/boat/captain.glb', (gltf) => {
@@ -265,6 +266,7 @@ export function createBoat() {
     model.traverse((obj) => {
       obj.frustumCulled = false;
     });
+    captainModel = model;
     captainRoot.add(model);
     const box = boundsIn(captainRoot, model);
     const size = box.getSize(new THREE.Vector3());
@@ -286,6 +288,29 @@ export function createBoat() {
     }
     placeCaptain();
   });
+
+  // Arcade only. Yaw on the rear bench, toward the nearest white bamboo still
+  // ahead. Position stays on the seat. Normal rowing keeps the bow pose.
+  function faceCaptain(dt, look) {
+    if (!captainFit) return;
+    const step = Math.min(0.05, Math.max(0, dt || 0));
+    let target = CAPTAIN_BOW_YAW;
+    if (look) {
+      captainRoot.getWorldPosition(captainWorld);
+      const dx = look.x - captainWorld.x;
+      const dz = look.z - captainWorld.z;
+      if (dx * dx + dz * dz > 0.04) {
+        const worldFace = Math.atan2(dx, dz);
+        target = wrapPi(worldFace - state.yaw + CAPTAIN_BOW_YAW);
+      }
+    }
+    const ease = 1 - Math.exp(-3.2 * step);
+    captainYaw += wrapPi(target - captainYaw) * ease;
+    captainRoot.rotation.y = captainYaw;
+    const seat = CAPTAIN_SEATS[hullName];
+    captainRoot.position.set(seat.x, seat.y, seat.z);
+  }
+
   const lampFeet = {
     mevcut: new THREE.Vector3(0, LAMP_FOOT_Y, 1.72),
     donnichols: new THREE.Vector3(0, 0.63, 1.7),
@@ -357,7 +382,7 @@ export function createBoat() {
   }
 
   function applyStern() {
-    const show = !hideOars && hullName === 'donnichols';
+    const show = hullName === 'donnichols';
     for (const lamp of sternLamps) {
       lamp.group.visible = show;
       lamp.light.visible = show;
@@ -441,14 +466,12 @@ export function createBoat() {
     for (const lamp of sternLamps) {
       for (const mat of lamp.glowMats) mat.emissiveIntensity = lamp.light.visible ? glow * lamp.bright : 0;
     }
-    if (!input.arcade) {
-      tintLamp(sternLamps[1], STERN_WARM, STERN_LIGHT);
-      tintLamp(sternLamps[0], STERN_WARM, STERN_LIGHT);
-      headlight.color.copy(HEAD_WARM);
-    }
+    tintLamp(sternLamps[1], STERN_WARM, STERN_LIGHT);
+    tintLamp(sternLamps[0], STERN_WARM, STERN_LIGHT);
+    if (!input.arcade) headlight.color.copy(HEAD_WARM);
     const lampReach = input.arcade ? 2.7 : 12;
     lantern.light.distance = lampReach;
-    for (const lamp of sternLamps) lamp.light.distance = lampReach;
+    for (const lamp of sternLamps) lamp.light.distance = 12;
   }
 
   function updateArcade(dt, time, input) {
@@ -704,6 +727,7 @@ export function createBoat() {
     arcadeHeel = 0;
     group.position.set(0, 0, 0);
     group.rotation.set(0, 0, 0);
+    placeCaptain();
   }
 
   return {
@@ -711,6 +735,7 @@ export function createBoat() {
     state,
     tryStroke,
     update,
+    faceCaptain,
     reset,
     setHull,
     lanternPosition,
@@ -734,8 +759,19 @@ export function createBoat() {
         seatZ: seat.z,
         yaw: captainRoot.rotation.y,
         scale: captainRoot.scale.x,
+        rootX: captainRoot.position.x,
+        rootY: captainRoot.position.y,
+        rootZ: captainRoot.position.z,
         parent: captainRoot.parent === body,
       };
+    },
+    sternSample() {
+      return sternLamps.map((lamp) => ({
+        visible: !!(lamp.group.visible && lamp.light.visible),
+        x: lamp.foot.x,
+        z: lamp.foot.z,
+        distance: lamp.light.distance,
+      }));
     },
     blades() {
       group.updateWorldMatrix(true, true);
