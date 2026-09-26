@@ -638,8 +638,10 @@ export function createObstacles(scene) {
     const model = cloneSkeleton(template.scene);
     model.scale.setScalar(template.scale);
     // Same length every time. Spin around the left-right axis so another face is up.
+    // Half of them also turn 180 so the left end and the right end swap.
     const roll = rng() * Math.PI * 2;
-    model.rotation.set(roll, 0, 0);
+    const endYaw = rng() < 0.5 ? Math.PI : 0;
+    model.rotation.set(roll, endYaw, 0);
     model.position.set(0, 0, 0);
     model.traverse((obj) => {
       obj.frustumCulled = false;
@@ -666,6 +668,7 @@ export function createObstacles(scene) {
       centerX: -rolledCenter.x,
       centerZ: -rolledCenter.z,
       rollX: roll,
+      endYaw,
       alignYaw: template.alignYaw,
       face: false,
       faceYaw: 0,
@@ -845,7 +848,7 @@ export function createObstacles(scene) {
         // ghosts flicker into an empty lane; the rest keep theirs.
         if (item.span) {
           item.model.position.set(item.centerX, item.foot, item.centerZ);
-          item.model.rotation.set(item.rollX || 0, 0, 0);
+          item.model.rotation.set(item.rollX || 0, item.endYaw || 0, 0);
         } else {
           item.model.position.set(0, item.foot, 0);
           item.model.rotation.set(0, 0, 0);
