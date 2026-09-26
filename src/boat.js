@@ -14,8 +14,9 @@ const BANK = 4.72;
 const ARCADE_CRUISE = 1.15 * 3;
 const LANE_OFFSET = 3.4;
 const LANES = [-LANE_OFFSET, 0, LANE_OFFSET];
-// Same slide as before the bow swing. The yaw and heel play inside that crossing.
-const LANE_EASE = 7;
+// Ease 4.9 is the old rate of 7 stretched from a 0.7 s settle to 1 s.
+// Yaw and heel are driven by this same slide, not a separate clock.
+const LANE_EASE = 4.9;
 const ARCADE_YAW_PEAK = 0.36;
 const ARCADE_HEEL = 0.3;
 // The canal is a straight run on +Z, so downstream is world yaw 0.
