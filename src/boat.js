@@ -11,7 +11,7 @@ const TURN_EASE = 2.1;
 const BANK = 4.72;
 // Arcade keeps the hull inside the canal. +X is the player's left.
 // Side lanes sit in toward the water edges. The middle lane stays on center.
-const ARCADE_CRUISE = 1.15 * 3;
+const ARCADE_CRUISE = 1.15 * 6;
 const LANE_OFFSET = 3.4;
 const LANES = [-LANE_OFFSET, 0, LANE_OFFSET];
 // Ease 4.9 is the old rate of 7 stretched from a 0.7 s settle to 1 s.
@@ -23,9 +23,9 @@ const ARCADE_HEEL = 0.3;
 // A bend would return that stretch's heading instead of this constant.
 const DOWNSTREAM_YAW = 0;
 const YAW_LIMIT = Math.PI / 2;
-// Keel of the loaded hull is local y=-0.12. Sit it on the water so the
-// open interior stays dry and the outside still meets the surface.
-const KEEL_RAISE = 0.124;
+// Keel of the loaded hull is local y=-0.12. 0.084 is 4 cm under the old
+// flush seat, so the hull sits in the water without a big drop.
+const KEEL_RAISE = 0.084;
 // One scale against the model's original beam. Length and height stay 1.
 const BEAM_NARROW = 0.75;
 // Nudge the hull forward of the follow point. The camera distance and height stay put.
@@ -258,15 +258,23 @@ export function createBoat() {
     donnRoot.visible = hullName === 'donnichols';
   });
 
+  let hideOars = false;
+
+  function applyOars() {
+    const donn = hullName === 'donnichols';
+    const show = !hideOars;
+    oarL.visible = show && !donn;
+    oarR.visible = show && !donn;
+    donnOarL.visible = show && donn;
+    donnOarR.visible = show && donn;
+  }
+
   function setHull(name) {
     hullName = name === 'donnichols' ? 'donnichols' : 'mevcut';
     const donn = hullName === 'donnichols';
     mevcutHull.visible = !donn;
-    oarL.visible = !donn;
-    oarR.visible = !donn;
     donnRoot.visible = donn;
-    donnOarL.visible = donn;
-    donnOarR.visible = donn;
+    applyOars();
     for (const lamp of sternLamps) {
       lamp.group.visible = donn;
       lamp.light.visible = donn;
@@ -438,8 +446,10 @@ export function createBoat() {
   }
 
   function update(dt, time, input) {
+    hideOars = !!input.arcade;
     if (input.arcade) {
       updateArcade(dt, time, input);
+      applyOars();
       return;
     }
     arcadeLaneArmed = false;
@@ -532,6 +542,7 @@ export function createBoat() {
     }
 
     settleOnWater(time, input, !!input.forward);
+    applyOars();
   }
 
   const lanternWorld = new THREE.Vector3();
