@@ -30,7 +30,7 @@ const BLOOD_LAMP_COLOR = 0xff3d6e;
 const HAND_LAMP_EMISSIVE = 4;
 const HAND_LAMP_BODY = 0.2;
 // How strongly the cloak spot lights ghost_blood. There is no lantern mesh.
-const BLOOD_LAMP_BODY = 0.05;
+const BLOOD_LAMP_BODY = 0.03;
 const GHOST_LAMPS = 16;
 const ghostLamp = {
   uPos: { value: Array.from({ length: GHOST_LAMPS }, () => new THREE.Vector3(0, -40, 0)) },
