@@ -149,11 +149,8 @@ const TYPES = [
   // fitAcross is the widest horizontal side, so the rock stays in one lane.
   // 2.25 is 125% of the previous 1.8 fit. Ghosts and the log are unchanged.
   { id: 'rock', url: '/assets/obstacles/rock/scene.gltf', face: false, fitAcross: 2.25 },
-  // One log across every lane. 8.0325 is 5% over the 7.65 fit, which was already
-  // 75% of the first oversized size. Bark stays intact, a little water remains
-  // at each bank, and the three lanes are still covered.
-  { id: 'tree_debris_01', url: '/assets/obstacles/tree_debris_01/tree_debris_01.glb', face: false, fitAcross: 8.0325, span: true },
 ];
+// No span model is loaded. The row stays a normal row until one is added here.
 // ArrowUp within this gap in front of the log commits the flight across it.
 const LOG_JUMP_GAP = 2;
 // Roll about the length (X). The face that pointed along the river, toward the
