@@ -149,13 +149,12 @@ const TYPES = [
   // fitAcross is the widest horizontal side, so the rock stays in one lane.
   // 2.25 is 125% of the previous 1.8 fit. Ghosts and the log are unchanged.
   { id: 'rock', url: '/assets/obstacles/rock/scene.gltf', face: false, fitAcross: 2.25 },
+  // One stick across every lane. 8.0325 leaves a little water at each bank.
+  // The mesh already lies on X: cut ends to the sides, curved face up.
+  { id: 'wood_stick', url: '/assets/obstacles/wood_stick/scene.gltf', face: false, fitAcross: 8.0325, span: true },
 ];
-// No span model is loaded. The row stays a normal row until one is added here.
 // ArrowUp within this gap in front of the log commits the flight across it.
 const LOG_JUMP_GAP = 2;
-// Roll about the length (X). The face that pointed along the river, toward the
-// boat, becomes the top. Cut ends stay on the left and right.
-const LOG_ROLL = Math.PI / 2;
 // About one row in six is a log, and that row has nothing else.
 const LOG_ROW = 0.16;
 
@@ -566,7 +565,9 @@ export function createObstacles(scene) {
     const group = new THREE.Group();
     const model = cloneSkeleton(template.scene);
     model.scale.setScalar(template.scale);
-    model.rotation.set(LOG_ROLL, 0, 0);
+    // Same length every time. Spin around the left-right axis so another face is up.
+    const roll = rng() * Math.PI * 2;
+    model.rotation.set(roll, 0, 0);
     model.position.set(0, 0, 0);
     model.traverse((obj) => {
       obj.frustumCulled = false;
@@ -590,7 +591,7 @@ export function createObstacles(scene) {
       foot: -rolled.min.y,
       centerX: -rolledCenter.x,
       centerZ: -rolledCenter.z,
-      rollX: LOG_ROLL,
+      rollX: roll,
       alignYaw: template.alignYaw,
       face: false,
       faceYaw: 0,
@@ -908,6 +909,7 @@ export function createObstacles(scene) {
           })(),
           type: item.type,
           span: !!item.span,
+          roll: item.span ? item.rollX : 0,
           clip: !!item.mixer,
           y: item.group.position.y,
           worldHeight: item.worldHeight,
